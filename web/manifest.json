@@ -1,11 +1,11 @@
 {
-    "name": "mood_tracker",
-    "short_name": "mood_tracker",
+    "name": "Mood Tracker",
+    "short_name": "Mood",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "A simple foundation for the Mood Tracker app.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
