@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mood_tracker/features/dashboard/dashboard_page.dart';
+import 'package:mood_tracker/features/daily_log/daily_log_models.dart';
 import 'package:mood_tracker/features/daily_log/daily_log_page.dart';
 import 'package:mood_tracker/features/settings/settings_page.dart';
 import 'package:mood_tracker/features/trends/trends_page.dart';
@@ -34,13 +35,8 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
-
-  static const _pages = <Widget>[
-    DashboardPage(),
-    DailyLogPage(),
-    TrendsPage(),
-    SettingsPage(),
-  ];
+  DailyLogEntry? _latestEntry;
+  final _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
   static const _destinations = <NavigationDestination>[
     NavigationDestination(
@@ -67,16 +63,41 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: _pages[_selectedIndex],
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
-        destinations: _destinations,
-        onDestinationSelected: (index) {
+    final pages = <Widget>[
+      DashboardPage(latestEntry: _latestEntry),
+      DailyLogPage(
+        initialEntry: _latestEntry,
+        onSave: (entry) {
           setState(() {
-            _selectedIndex = index;
+            _latestEntry = entry;
+            _selectedIndex = 0;
+          });
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _scaffoldMessengerKey.currentState
+              ?..hideCurrentSnackBar()
+              ..showSnackBar(
+                const SnackBar(content: Text('Daily log saved locally.')),
+              );
           });
         },
+      ),
+      const TrendsPage(),
+      const SettingsPage(),
+    ];
+
+    return ScaffoldMessenger(
+      key: _scaffoldMessengerKey,
+      child: Scaffold(
+        body: pages[_selectedIndex],
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _selectedIndex,
+          destinations: _destinations,
+          onDestinationSelected: (index) {
+            setState(() {
+              _selectedIndex = index;
+            });
+          },
+        ),
       ),
     );
   }
