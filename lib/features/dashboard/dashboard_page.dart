@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:mood_tracker/features/daily_log/daily_log_models.dart';
+import 'package:mood_tracker/features/daily_log/data/daily_log_seed.dart';
+import 'package:mood_tracker/features/daily_log/models/daily_log_entry.dart';
 
 class DashboardPage extends StatelessWidget {
   const DashboardPage({

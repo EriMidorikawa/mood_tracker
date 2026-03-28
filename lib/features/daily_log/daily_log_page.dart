@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:mood_tracker/features/daily_log/daily_log_models.dart';
+import 'package:mood_tracker/features/daily_log/data/daily_log_seed.dart';
+import 'package:mood_tracker/features/daily_log/models/daily_log_entry.dart';
+import 'package:mood_tracker/features/daily_log/models/daily_log_question.dart';
 
 class DailyLogPage extends StatefulWidget {
   const DailyLogPage({

@@ -1,28 +1,4 @@
-class DailyLogQuestion {
-  const DailyLogQuestion({
-    required this.id,
-    required this.label,
-    required this.lowLabel,
-    required this.highLabel,
-  });
-
-  final String id;
-  final String label;
-  final String lowLabel;
-  final String highLabel;
-}
-
-class DailyLogEntry {
-  const DailyLogEntry({
-    required this.loggedAt,
-    required this.responses,
-    required this.note,
-  });
-
-  final DateTime loggedAt;
-  final Map<String, int> responses;
-  final String note;
-}
+import 'package:mood_tracker/features/daily_log/models/daily_log_question.dart';
 
 const dailyLogQuestions = <DailyLogQuestion>[
   DailyLogQuestion(
