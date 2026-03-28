@@ -34,6 +34,11 @@ class DashboardPage extends StatelessWidget {
             'Latest Check-in',
             style: Theme.of(context).textTheme.headlineSmall,
           ),
+          const SizedBox(height: 4),
+          Text(
+            'Recorded for ${_formatDate(latestEntry!.loggedAt)}',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
           const SizedBox(height: 16),
           Card(
             child: Padding(
@@ -46,7 +51,7 @@ class DashboardPage extends StatelessWidget {
                     runSpacing: 12,
                     children: [
                       _SummaryChip(
-                        label: 'Log date',
+                        label: 'Record date',
                         value: _formatDate(latestEntry!.loggedAt),
                         icon: Icons.event_outlined,
                       ),

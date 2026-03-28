@@ -20,6 +20,9 @@ class _DailyLogPageState extends State<DailyLogPage> {
     for (final question in dailyLogQuestions)
       question.id: widget.initialEntry?.responses[question.id] ?? 3,
   };
+  late DateTime _selectedLogDate = _dateOnly(
+    widget.initialEntry?.loggedAt ?? DateTime.now(),
+  );
   late final TextEditingController _memoController = TextEditingController(
     text: widget.initialEntry?.note ?? '',
   );
@@ -34,16 +37,34 @@ class _DailyLogPageState extends State<DailyLogPage> {
     FocusScope.of(context).unfocus();
     widget.onSave(
       DailyLogEntry(
-        loggedAt: DateTime.now(),
+        loggedAt: _selectedLogDate,
         responses: Map.unmodifiable(_responses),
         note: _memoController.text.trim(),
       ),
     );
   }
 
+  Future<void> _pickLogDate() async {
+    final now = DateTime.now();
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _selectedLogDate,
+      firstDate: DateTime(now.year - 5),
+      lastDate: DateTime(now.year + 1),
+    );
+
+    if (pickedDate == null) {
+      return;
+    }
+
+    setState(() {
+      _selectedLogDate = _dateOnly(pickedDate);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final logDate = _formatDate(widget.initialEntry?.loggedAt ?? DateTime.now());
+    final logDate = _formatDate(_selectedLogDate);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Daily Log')),
@@ -60,6 +81,8 @@ class _DailyLogPageState extends State<DailyLogPage> {
               leading: const Icon(Icons.event_outlined),
               title: const Text('Log date'),
               subtitle: Text(logDate),
+              trailing: const Icon(Icons.edit_calendar_outlined),
+              onTap: _pickLogDate,
             ),
           ),
           const SizedBox(height: 16),
@@ -175,4 +198,8 @@ String _formatDate(DateTime dateTime) {
   final year = dateTime.year;
 
   return '$month $day, $year';
+}
+
+DateTime _dateOnly(DateTime dateTime) {
+  return DateTime(dateTime.year, dateTime.month, dateTime.day);
 }
