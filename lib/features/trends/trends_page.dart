@@ -258,6 +258,7 @@ class _TrendsPageState extends State<TrendsPage> {
                         max: 5,
                         ticks: [1, 2, 3, 4, 5],
                       ),
+                      showCenterReferenceTicks: true,
                     ),
                     child: const SizedBox.expand(),
                   ),
@@ -398,6 +399,7 @@ class _WearableMetricSection extends StatelessWidget {
                   ? null
                   : 'No wearable data in this period.',
               yAxisSpec: chartData.yAxisSpec!,
+              showCenterReferenceTicks: false,
             ),
             child: const SizedBox.expand(),
           ),
@@ -524,6 +526,7 @@ class _TrendChartPainter extends CustomPainter {
     required this.verticalMarkers,
     required this.emptyMessage,
     required this.yAxisSpec,
+    required this.showCenterReferenceTicks,
   });
 
   final List<_ChartSeries> series;
@@ -531,6 +534,7 @@ class _TrendChartPainter extends CustomPainter {
   final List<double> verticalMarkers;
   final String? emptyMessage;
   final _ChartYAxisSpec yAxisSpec;
+  final bool showCenterReferenceTicks;
 
   static const _leftPadding = 32.0;
   static const _topPadding = 8.0;
@@ -585,7 +589,9 @@ class _TrendChartPainter extends CustomPainter {
       _paintSeries(canvas, chartRect, chartSeries);
     }
 
-    _paintCenterTicks(canvas, chartRect);
+    if (showCenterReferenceTicks) {
+      _paintCenterTicks(canvas, chartRect);
+    }
 
     for (final label in xAxisLabels) {
       final x = _xForRatio(chartRect, label.positionRatio);
@@ -712,7 +718,8 @@ class _TrendChartPainter extends CustomPainter {
         oldDelegate.xAxisLabels != xAxisLabels ||
         oldDelegate.verticalMarkers != verticalMarkers ||
         oldDelegate.emptyMessage != emptyMessage ||
-        oldDelegate.yAxisSpec != yAxisSpec;
+        oldDelegate.yAxisSpec != yAxisSpec ||
+        oldDelegate.showCenterReferenceTicks != showCenterReferenceTicks;
   }
 }
 
