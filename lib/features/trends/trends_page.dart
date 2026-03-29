@@ -15,18 +15,18 @@ class TrendsPage extends StatefulWidget {
 }
 
 class _TrendsPageState extends State<TrendsPage> {
-  int _selectedDays = 7;
+  _TrendRange _selectedRange = _TrendRange.sevenDays;
   _TrendMetric _selectedMetric = _trendMetrics.first;
 
   @override
   Widget build(BuildContext context) {
     final metricColor = _selectedMetric.color;
-    final points = _buildMetricPoints(
+    final series = _buildTrendSeries(
       entries: widget.entries,
-      days: _selectedDays,
+      range: _selectedRange,
       metricKey: _selectedMetric.key,
     );
-    final loggedValues = points
+    final loggedValues = series.points
         .where((point) => point.value != null)
         .map((point) => point.value!)
         .toList();
@@ -64,15 +64,25 @@ class _TrendsPageState extends State<TrendsPage> {
             onSelected: _handleMetricSelected,
           ),
           const SizedBox(height: 8),
-          SegmentedButton<int>(
+          SegmentedButton<_TrendRange>(
             segments: const [
-              ButtonSegment<int>(value: 7, label: Text('7 days')),
-              ButtonSegment<int>(value: 30, label: Text('30 days')),
+              ButtonSegment<_TrendRange>(
+                value: _TrendRange.sevenDays,
+                label: Text('7D'),
+              ),
+              ButtonSegment<_TrendRange>(
+                value: _TrendRange.thirtyDays,
+                label: Text('30D'),
+              ),
+              ButtonSegment<_TrendRange>(
+                value: _TrendRange.threeMonths,
+                label: Text('3M'),
+              ),
             ],
-            selected: {_selectedDays},
+            selected: {_selectedRange},
             onSelectionChanged: (selection) {
               setState(() {
-                _selectedDays = selection.first;
+                _selectedRange = selection.first;
               });
             },
           ),
@@ -86,17 +96,21 @@ class _TrendsPageState extends State<TrendsPage> {
                   SizedBox(
                     height: 240,
                     child: _MetricChart(
-                      points: points,
+                      points: series.points,
                       accentColor: metricColor,
+                      monthMarkers: series.monthMarkers,
                     ),
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(child: Text(_formatShortDate(points.first.date))),
-                      Text(_formatShortDate(points.last.date)),
-                    ],
-                  ),
+                  if (series.showRangeLabels)
+                    Row(
+                      children: [
+                        Expanded(child: Text(series.startLabel)),
+                        Text(series.endLabel),
+                      ],
+                    )
+                  else
+                    _MonthAxisLabels(monthMarkers: series.monthMarkers),
                 ],
               ),
             ),
@@ -112,7 +126,11 @@ class _TrendsPageState extends State<TrendsPage> {
                   _SummaryPill(
                     accentColor: metricColor,
                     label: 'Latest',
-                    value: latestValue == null ? '--' : '$latestValue',
+                    value: latestValue == null
+                        ? '--'
+                        : latestValue.toStringAsFixed(
+                            _selectedRange == _TrendRange.threeMonths ? 1 : 0,
+                          ),
                   ),
                   _SummaryPill(
                     accentColor: metricColor,
@@ -123,8 +141,8 @@ class _TrendsPageState extends State<TrendsPage> {
                   ),
                   _SummaryPill(
                     accentColor: metricColor,
-                    label: 'Logged days',
-                    value: '${loggedValues.length}',
+                    label: series.summaryLabel,
+                    value: '${series.loggedCount}',
                   ),
                 ],
               ),
@@ -209,10 +227,12 @@ class _MetricChart extends StatelessWidget {
   const _MetricChart({
     required this.points,
     required this.accentColor,
+    required this.monthMarkers,
   });
 
   final List<_MetricPoint> points;
   final Color accentColor;
+  final List<_MonthMarker> monthMarkers;
 
   @override
   Widget build(BuildContext context) {
@@ -239,6 +259,7 @@ class _MetricChart extends StatelessWidget {
               points: points,
               colorScheme: Theme.of(context).colorScheme,
               accentColor: accentColor,
+              monthMarkers: monthMarkers,
             ),
             child: const SizedBox.expand(),
           ),
@@ -253,11 +274,13 @@ class _MetricChartPainter extends CustomPainter {
     required this.points,
     required this.colorScheme,
     required this.accentColor,
+    required this.monthMarkers,
   });
 
   final List<_MetricPoint> points;
   final ColorScheme colorScheme;
   final Color accentColor;
+  final List<_MonthMarker> monthMarkers;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -265,8 +288,8 @@ class _MetricChartPainter extends CustomPainter {
       ..color = colorScheme.outlineVariant
       ..strokeWidth = 1;
     final linePaint = Paint()
-      ..color = accentColor
-      ..strokeWidth = 3
+      ..color = accentColor.withValues(alpha: 0.45)
+      ..strokeWidth = 2
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
     final pointPaint = Paint()
@@ -275,10 +298,22 @@ class _MetricChartPainter extends CustomPainter {
     final missingPaint = Paint()
       ..color = colorScheme.outline
       ..strokeWidth = 1.5;
+    final monthLinePaint = Paint()
+      ..color = colorScheme.outline.withValues(alpha: 0.45)
+      ..strokeWidth = 1;
 
     for (var scale = 1; scale <= 5; scale++) {
       final y = _yForValue(scale.toDouble(), size.height);
       canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
+    for (final marker in monthMarkers) {
+      final x = size.width * marker.position;
+      canvas.drawLine(
+        Offset(x, 0),
+        Offset(x, size.height),
+        monthLinePaint,
+      );
     }
 
     final stepX = points.length == 1 ? 0.0 : size.width / (points.length - 1);
@@ -303,7 +338,7 @@ class _MetricChartPainter extends CustomPainter {
 
       final currentPoint = Offset(
         x,
-        _yForValue(point.value!.toDouble(), size.height),
+        _yForValue(point.value!, size.height),
       );
 
       if (previousPoint != null && previousIndex == index - 1) {
@@ -325,7 +360,42 @@ class _MetricChartPainter extends CustomPainter {
   bool shouldRepaint(covariant _MetricChartPainter oldDelegate) {
     return oldDelegate.points != points ||
         oldDelegate.colorScheme != colorScheme ||
-        oldDelegate.accentColor != accentColor;
+        oldDelegate.accentColor != accentColor ||
+        oldDelegate.monthMarkers != monthMarkers;
+  }
+}
+
+class _MonthAxisLabels extends StatelessWidget {
+  const _MonthAxisLabels({
+    required this.monthMarkers,
+  });
+
+  final List<_MonthMarker> monthMarkers;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 20,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return Stack(
+            children: [
+              for (final marker in monthMarkers)
+                Positioned(
+                  left: (constraints.maxWidth * marker.position).clamp(
+                    0.0,
+                    constraints.maxWidth - 28,
+                  ),
+                  child: Text(
+                    marker.label,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
   }
 }
 
@@ -364,7 +434,7 @@ class _MetricPoint {
   });
 
   final DateTime date;
-  final int? value;
+  final double? value;
 }
 
 class _TrendMetric {
@@ -377,6 +447,42 @@ class _TrendMetric {
   final String key;
   final String label;
   final Color color;
+}
+
+class _TrendSeries {
+  const _TrendSeries({
+    required this.points,
+    required this.startLabel,
+    required this.endLabel,
+    required this.summaryLabel,
+    required this.loggedCount,
+    required this.showRangeLabels,
+    required this.monthMarkers,
+  });
+
+  final List<_MetricPoint> points;
+  final String startLabel;
+  final String endLabel;
+  final String summaryLabel;
+  final int loggedCount;
+  final bool showRangeLabels;
+  final List<_MonthMarker> monthMarkers;
+}
+
+class _MonthMarker {
+  const _MonthMarker({
+    required this.position,
+    required this.label,
+  });
+
+  final double position;
+  final String label;
+}
+
+enum _TrendRange {
+  sevenDays,
+  thirtyDays,
+  threeMonths,
 }
 
 const _trendMetrics = <_TrendMetric>[
@@ -418,14 +524,41 @@ final _appetiteMetrics = <_TrendMetric>[
   _trendMetrics[4],
 ];
 
-List<_MetricPoint> _buildMetricPoints({
+_TrendSeries _buildTrendSeries({
+  required List<DailyLogEntry> entries,
+  required _TrendRange range,
+  required String metricKey,
+}) {
+  switch (range) {
+    case _TrendRange.sevenDays:
+      return _buildDailySeries(
+        entries: entries,
+        days: 7,
+        metricKey: metricKey,
+      );
+    case _TrendRange.thirtyDays:
+      return _buildDailySeries(
+        entries: entries,
+        days: 30,
+        metricKey: metricKey,
+      );
+    case _TrendRange.threeMonths:
+      return _buildWeeklySeries(
+        entries: entries,
+        weeks: 13,
+        metricKey: metricKey,
+      );
+  }
+}
+
+_TrendSeries _buildDailySeries({
   required List<DailyLogEntry> entries,
   required int days,
   required String metricKey,
 }) {
   final today = _dateOnly(DateTime.now());
   final start = today.subtract(Duration(days: days - 1));
-  final valuesByDate = <String, int>{};
+  final valuesByDate = <String, double>{};
 
   for (final entry in entries) {
     final entryDate = _dateOnly(entry.loggedAt);
@@ -435,21 +568,86 @@ List<_MetricPoint> _buildMetricPoints({
 
     final value = entry.responses[metricKey];
     if (value != null) {
-      valuesByDate[_dateKey(entryDate)] = value;
+      valuesByDate[_dateKey(entryDate)] = value.toDouble();
     }
   }
 
-  return List.generate(days, (index) {
+  final points = List.generate(days, (index) {
     final date = start.add(Duration(days: index));
     return _MetricPoint(
       date: date,
       value: valuesByDate[_dateKey(date)],
     );
   });
+
+  return _TrendSeries(
+    points: points,
+    startLabel: _formatShortDate(points.first.date),
+    endLabel: _formatShortDate(points.last.date),
+    summaryLabel: 'Logged days',
+    loggedCount: valuesByDate.length,
+    showRangeLabels: true,
+    monthMarkers: const [],
+  );
+}
+
+_TrendSeries _buildWeeklySeries({
+  required List<DailyLogEntry> entries,
+  required int weeks,
+  required String metricKey,
+}) {
+  final currentWeekStart = _startOfWeek(_dateOnly(DateTime.now()));
+  final startWeek = currentWeekStart.subtract(Duration(days: (weeks - 1) * 7));
+  final bucketValues = <String, List<int>>{};
+
+  for (final entry in entries) {
+    final entryDate = _dateOnly(entry.loggedAt);
+    final weekStart = _startOfWeek(entryDate);
+    if (weekStart.isBefore(startWeek) || weekStart.isAfter(currentWeekStart)) {
+      continue;
+    }
+
+    final value = entry.responses[metricKey];
+    if (value != null) {
+      bucketValues.putIfAbsent(_dateKey(weekStart), () => []).add(value);
+    }
+  }
+
+  final points = List.generate(weeks, (index) {
+    final weekStart = startWeek.add(Duration(days: index * 7));
+    final values = bucketValues[_dateKey(weekStart)];
+    final average = values == null || values.isEmpty
+        ? null
+        : values.reduce((sum, value) => sum + value) / values.length;
+
+    return _MetricPoint(
+      date: weekStart,
+      value: average,
+    );
+  });
+
+  final monthMarkers = _buildMonthMarkers(
+    startDate: points.first.date,
+    endDate: points.last.date,
+  );
+
+  return _TrendSeries(
+    points: points,
+    startLabel: _formatShortDate(points.first.date),
+    endLabel: _formatShortDate(points.last.date),
+    summaryLabel: 'Logged weeks',
+    loggedCount: points.where((point) => point.value != null).length,
+    showRangeLabels: false,
+    monthMarkers: monthMarkers,
+  );
 }
 
 DateTime _dateOnly(DateTime dateTime) {
   return DateTime(dateTime.year, dateTime.month, dateTime.day);
+}
+
+DateTime _startOfWeek(DateTime dateTime) {
+  return dateTime.subtract(Duration(days: dateTime.weekday - DateTime.monday));
 }
 
 String _dateKey(DateTime dateTime) {
@@ -476,4 +674,53 @@ String _formatShortDate(DateTime dateTime) {
   ];
 
   return '${months[dateTime.month - 1]} ${dateTime.day}';
+}
+
+List<_MonthMarker> _buildMonthMarkers({
+  required DateTime startDate,
+  required DateTime endDate,
+}) {
+  final markers = <_MonthMarker>[];
+  final totalDays = endDate.difference(startDate).inDays.toDouble();
+  if (totalDays <= 0) {
+    return markers;
+  }
+
+  var current = DateTime(startDate.year, startDate.month, 1);
+  if (current.isBefore(startDate)) {
+    current = DateTime(startDate.year, startDate.month + 1, 1);
+  }
+
+  while (!current.isAfter(endDate)) {
+    final offsetDays = current.difference(startDate).inDays.toDouble();
+    final position = (offsetDays / totalDays).clamp(0.0, 1.0);
+    markers.add(
+      _MonthMarker(
+        position: position,
+        label: _formatMonthLabel(current),
+      ),
+    );
+    current = DateTime(current.year, current.month + 1, 1);
+  }
+
+  return markers;
+}
+
+String _formatMonthLabel(DateTime dateTime) {
+  const months = <String>[
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  return months[dateTime.month - 1];
 }
