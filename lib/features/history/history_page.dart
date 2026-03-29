@@ -2,16 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:mood_tracker/app/settings_menu_button.dart';
 import 'package:mood_tracker/features/daily_log/daily_log_page.dart';
 import 'package:mood_tracker/features/daily_log/models/daily_log_entry.dart';
+import 'package:mood_tracker/features/wearables/models/daily_wearable_metric.dart';
+import 'package:mood_tracker/features/wearables/models/wearable_metric_type.dart';
 
 class HistoryPage extends StatefulWidget {
   const HistoryPage({
     super.key,
     required this.entries,
+    required this.wearableMetrics,
     required this.loadEntryByDate,
     required this.onSaveEntry,
   });
 
   final List<DailyLogEntry> entries;
+  final List<DailyWearableMetric> wearableMetrics;
   final Future<DailyLogEntry?> Function(DateTime) loadEntryByDate;
   final Future<void> Function(DailyLogEntry) onSaveEntry;
 
@@ -124,19 +128,17 @@ class _HistoryPageState extends State<HistoryPage> {
       return;
     }
 
-    final title = entry == null
-        ? 'Log ${_formatDate(logDate)}'
-        : 'Edit ${_formatDate(logDate)}';
-
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => DailyLogPage(
-          initialEntry: entry,
-          initialDate: entry == null ? logDate : null,
-          onSave: widget.onSaveEntry,
-          popOnSave: true,
-          showSettingsMenu: false,
-          title: title,
+        builder: (_) => _HistoryDayDetailPage(
+          logDate: logDate,
+          entry: entry,
+          wearableMetrics: [
+            for (final metric in widget.wearableMetrics)
+              if (_dateOnly(metric.date) == logDate) metric,
+          ],
+          loadEntryByDate: widget.loadEntryByDate,
+          onSaveEntry: widget.onSaveEntry,
         ),
       ),
     );
@@ -181,6 +183,8 @@ class _MonthHeader extends StatelessWidget {
 }
 
 class _WeekdayHeader extends StatelessWidget {
+  const _WeekdayHeader();
+
   @override
   Widget build(BuildContext context) {
     const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -266,6 +270,224 @@ class _CalendarDayCell extends StatelessWidget {
       ),
     );
   }
+}
+
+class _HistoryDayDetailPage extends StatefulWidget {
+  const _HistoryDayDetailPage({
+    required this.logDate,
+    required this.entry,
+    required this.wearableMetrics,
+    required this.loadEntryByDate,
+    required this.onSaveEntry,
+  });
+
+  final DateTime logDate;
+  final DailyLogEntry? entry;
+  final List<DailyWearableMetric> wearableMetrics;
+  final Future<DailyLogEntry?> Function(DateTime) loadEntryByDate;
+  final Future<void> Function(DailyLogEntry) onSaveEntry;
+
+  @override
+  State<_HistoryDayDetailPage> createState() => _HistoryDayDetailPageState();
+}
+
+class _HistoryDayDetailPageState extends State<_HistoryDayDetailPage> {
+  DailyLogEntry? _entry;
+
+  @override
+  void initState() {
+    super.initState();
+    _entry = widget.entry;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sleepMetric = _metricForType(WearableMetricType.sleepDurationMin);
+    final heartMetric = _metricForType(WearableMetricType.restingHeartRateBpm);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_formatDate(widget.logDate)),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Daily Log',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 12),
+                  if (_entry == null)
+                    Text(
+                      'No manual log saved for this day.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    )
+                  else ...[
+                    for (final summary in _manualSummaries(_entry!)) ...[
+                      _DetailRow(
+                        label: summary.label,
+                        value: summary.value,
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    if (_entry!.note.trim().isNotEmpty) ...[
+                      _DetailRow(
+                        label: 'Notes',
+                        value: _entry!.note.trim(),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                  ],
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: () async {
+                      final title = _entry == null
+                          ? 'Log ${_formatDate(widget.logDate)}'
+                          : 'Edit ${_formatDate(widget.logDate)}';
+                      await Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => DailyLogPage(
+                            initialEntry: _entry,
+                            initialDate:
+                                _entry == null ? widget.logDate : null,
+                            onSave: widget.onSaveEntry,
+                            popOnSave: true,
+                            showSettingsMenu: false,
+                            title: title,
+                          ),
+                        ),
+                      );
+                      await _refreshEntry();
+                    },
+                    child: Text(_entry == null ? 'Add log' : 'Edit'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (sleepMetric != null || heartMetric != null) ...[
+            const SizedBox(height: 16),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Wearable',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 12),
+                    if (sleepMetric != null) ...[
+                      _DetailRow(
+                        label: 'Sleep Duration',
+                        value: '${sleepMetric.value.round()} min',
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    if (heartMetric != null)
+                      _DetailRow(
+                        label: 'Resting Heart Rate',
+                        value: '${heartMetric.value.round()} bpm',
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  DailyWearableMetric? _metricForType(WearableMetricType metricType) {
+    for (final metric in widget.wearableMetrics) {
+      if (metric.metricType == metricType) {
+        return metric;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _refreshEntry() async {
+    final updatedEntry = await widget.loadEntryByDate(widget.logDate);
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _entry = updatedEntry;
+    });
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 132,
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ManualSummary {
+  const _ManualSummary({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+}
+
+List<_ManualSummary> _manualSummaries(DailyLogEntry entry) {
+  return [
+    _ManualSummary(label: 'Mood', value: '${entry.responses['mood'] ?? '-'}'),
+    _ManualSummary(
+      label: 'Motivation',
+      value: '${entry.responses['motivation'] ?? '-'}',
+    ),
+    _ManualSummary(
+      label: 'Fatigue',
+      value: '${entry.responses['fatigue'] ?? '-'}',
+    ),
+    _ManualSummary(label: 'Hunger', value: '${entry.responses['hunger'] ?? '-'}'),
+    _ManualSummary(
+      label: 'Sweet Craving',
+      value: '${entry.responses['sweet_craving'] ?? '-'}',
+    ),
+  ];
 }
 
 List<DateTime?> _buildMonthCells(DateTime month) {

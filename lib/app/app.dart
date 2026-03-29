@@ -187,6 +187,7 @@ class _AppShellState extends State<AppShell> {
       ),
       HistoryPage(
         entries: _entries,
+        wearableMetrics: _wearableMetrics,
         loadEntryByDate: _repository.loadEntryByDate,
         onSaveEntry: _saveEntryFromHistory,
       ),
