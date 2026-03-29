@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_api_client.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_callback_debug_store.dart';
+import 'package:mood_tracker/features/wearables/data/fitbit_oauth_session_store.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_source_adapter.dart';
 import 'package:mood_tracker/features/wearables/data/local_wearable_repository.dart';
 import 'package:mood_tracker/features/wearables/models/daily_wearable_metric.dart';
 import 'package:mood_tracker/features/wearables/models/fitbit_callback_debug.dart';
+import 'package:mood_tracker/features/wearables/models/fitbit_oauth_preparation.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_connection.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_metric_type.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_provider.dart';
@@ -104,6 +106,40 @@ class _SettingsPageState extends State<SettingsPage> {
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 12),
+                  ValueListenableBuilder<FitbitOAuthPreparation?>(
+                    valueListenable: fitbitOAuthSessionStore.preparedSession,
+                    builder: (context, preparation, _) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          OutlinedButton(
+                            onPressed: () {
+                              fitbitOAuthSessionStore.prepareAuthorization();
+                            },
+                            child: const Text('Prepare Fitbit OAuth'),
+                          ),
+                          if (preparation != null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Prepared Fitbit OAuth state: ${preparation.state}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Prepared code challenge: ${preparation.codeChallenge}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Prepared auth URL: ${preparation.authorizationUri}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
                   ValueListenableBuilder<FitbitCallbackDebug?>(
                     valueListenable: fitbitCallbackDebugStore.lastCallback,
                     builder: (context, callback, _) {
@@ -132,6 +168,13 @@ class _SettingsPageState extends State<SettingsPage> {
                             const SizedBox(height: 4),
                             Text(
                               'state: ${callback.state}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                          if (callback.stateMatched != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              'Last callback state matched: ${callback.stateMatched}',
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ],
