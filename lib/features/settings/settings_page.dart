@@ -122,6 +122,13 @@ class _SettingsPageState extends State<SettingsPage> {
                           : 'Sync Fitbit data',
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  OutlinedButton(
+                    onPressed: _fitbitConnection == null
+                        ? null
+                        : _disconnectFitbit,
+                    child: const Text('Disconnect'),
+                  ),
                   if (_fitbitSyncResult != null) ...[
                     const SizedBox(height: 12),
                     Text(
@@ -242,6 +249,35 @@ class _SettingsPageState extends State<SettingsPage> {
 
     setState(() {
       _fitbitConnection = connection;
+    });
+  }
+
+  Future<void> _disconnectFitbit() async {
+    final existingConnection = _fitbitConnection;
+    if (existingConnection == null) {
+      return;
+    }
+
+    await _wearableRepository.upsertConnection(
+      WearableConnection(
+        provider: WearableProvider.fitbit,
+        isConnected: false,
+        accountLabel: existingConnection.accountLabel,
+        connectedAt: existingConnection.connectedAt,
+        lastSyncedAt: null,
+      ),
+    );
+
+    final updatedConnection = await _wearableRepository.loadConnection(
+      WearableProvider.fitbit,
+    );
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _fitbitConnection = updatedConnection;
+      _fitbitSyncResult = 'Fitbit disconnected locally';
     });
   }
 }
