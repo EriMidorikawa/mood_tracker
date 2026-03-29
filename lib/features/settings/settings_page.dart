@@ -29,6 +29,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _isSavingSample = false;
   String? _sampleSaveResult;
   bool _isSyncingFitbit = false;
+  bool _isBackfillingFitbit = false;
   bool _isHandlingFitbitCallback = false;
   String? _fitbitSyncResult;
   String? _lastHandledCallbackUri;
@@ -224,6 +225,15 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ),
                   const SizedBox(height: 8),
+                  FilledButton.tonal(
+                    onPressed: _isBackfillingFitbit ? null : _backfillFitbitData,
+                    child: Text(
+                      _isBackfillingFitbit
+                          ? 'Backfilling Fitbit data...'
+                          : 'Backfill Fitbit data',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   OutlinedButton(
                     onPressed: _fitbitConnection == null
                         ? null
@@ -342,6 +352,93 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(() {
         _isSyncingFitbit = false;
         _fitbitSyncResult = 'Fitbit sync failed';
+      });
+    }
+  }
+
+  Future<void> _backfillFitbitData() async {
+    setState(() {
+      _isBackfillingFitbit = true;
+      _fitbitSyncResult = 'Backfilling Fitbit data...';
+    });
+
+    var importedDays = 0;
+    try {
+      final token = await _fitbitTokenStore.loadToken();
+      if (token == null || token.isExpired) {
+        throw const FitbitApiException('Authorize Fitbit first.');
+      }
+
+      final today = _dateOnly(DateTime.now());
+      final fitbitAdapter = FitbitSourceAdapter(
+        fetchSnapshot:
+            FitbitApiClient(accessToken: token.accessToken).fetchDailySnapshot,
+      );
+
+      for (var offset = 89; offset >= 0; offset--) {
+        final date = today.subtract(Duration(days: offset));
+        try {
+          final metrics = await fitbitAdapter.fetchDailyMetrics(date);
+          await _wearableRepository.upsertDailyMetrics(metrics);
+          importedDays += 1;
+        } catch (_) {
+          if (!mounted) {
+            return;
+          }
+
+          setState(() {
+            _isBackfillingFitbit = false;
+            _fitbitSyncResult =
+                'Imported $importedDays / 90 days before sync failed';
+          });
+          return;
+        }
+      }
+
+      final now = DateTime.now();
+      final existingConnection = await _wearableRepository.loadConnection(
+        WearableProvider.fitbit,
+      );
+      await _wearableRepository.upsertConnection(
+        WearableConnection(
+          provider: WearableProvider.fitbit,
+          isConnected: true,
+          accountLabel: existingConnection?.accountLabel,
+          connectedAt: existingConnection?.connectedAt ?? now,
+          lastSyncedAt: now,
+        ),
+      );
+      final updatedConnection = await _wearableRepository.loadConnection(
+        WearableProvider.fitbit,
+      );
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _fitbitConnection = updatedConnection;
+        _isBackfillingFitbit = false;
+        _fitbitSyncResult = 'Imported 90 days of Fitbit data';
+      });
+    } on FitbitApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isBackfillingFitbit = false;
+        _fitbitSyncResult = importedDays == 0
+            ? error.message
+            : 'Imported $importedDays / 90 days before sync failed';
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isBackfillingFitbit = false;
+        _fitbitSyncResult = 'Imported 0 / 90 days before sync failed';
       });
     }
   }
