@@ -7,6 +7,8 @@ import 'package:mood_tracker/features/history/history_page.dart';
 import 'package:mood_tracker/features/home/home_page.dart';
 import 'package:mood_tracker/features/trends/trends_page.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_callback_link_service.dart';
+import 'package:mood_tracker/features/wearables/data/local_wearable_repository.dart';
+import 'package:mood_tracker/features/wearables/models/daily_wearable_metric.dart';
 
 class MoodTrackerApp extends StatelessWidget {
   const MoodTrackerApp({super.key});
@@ -38,9 +40,11 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   final _repository = LocalDailyLogRepository();
+  final _wearableRepository = LocalWearableRepository();
   final _fitbitCallbackLinkService = FitbitCallbackLinkService();
   int _selectedIndex = 0;
   List<DailyLogEntry> _entries = const [];
+  List<DailyWearableMetric> _wearableMetrics = const [];
   bool _isLoading = true;
   final _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
@@ -77,12 +81,14 @@ class _AppShellState extends State<AppShell> {
 
   Future<void> _loadData() async {
     final entries = await _repository.loadEntriesSorted();
+    final wearableMetrics = await _wearableRepository.loadDailyMetrics();
     if (!mounted) {
       return;
     }
 
     setState(() {
       _entries = entries;
+      _wearableMetrics = wearableMetrics;
       _isLoading = false;
     });
   }
@@ -175,7 +181,10 @@ class _AppShellState extends State<AppShell> {
         onOpenTodayLog: () => _openTodayLog(context),
         onOpenSettings: () => openSettingsPage(context),
       ),
-      TrendsPage(entries: _entries),
+      TrendsPage(
+        entries: _entries,
+        wearableMetrics: _wearableMetrics,
+      ),
       HistoryPage(
         entries: _entries,
         loadEntryByDate: _repository.loadEntryByDate,

@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:mood_tracker/app/settings_menu_button.dart';
 import 'package:mood_tracker/features/daily_log/models/daily_log_entry.dart';
+import 'package:mood_tracker/features/wearables/models/daily_wearable_metric.dart';
+import 'package:mood_tracker/features/wearables/models/wearable_metric_type.dart';
+import 'package:mood_tracker/features/wearables/models/wearable_provider.dart';
 
 class TrendsPage extends StatefulWidget {
-  const TrendsPage({super.key, required this.entries});
+  const TrendsPage({
+    super.key,
+    required this.entries,
+    required this.wearableMetrics,
+  });
 
   final List<DailyLogEntry> entries;
+  final List<DailyWearableMetric> wearableMetrics;
 
   @override
   State<TrendsPage> createState() => _TrendsPageState();
@@ -40,6 +48,7 @@ class _TrendsPageState extends State<TrendsPage> {
   List<int> get _availableYears {
     final years = {
       for (final entry in widget.entries) entry.loggedAt.year,
+      for (final metric in widget.wearableMetrics) metric.date.year,
     }.toList()
       ..sort();
     return years;
@@ -47,18 +56,34 @@ class _TrendsPageState extends State<TrendsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final primaryMetric = _metricById(_selectedMetric);
     final secondaryMetric = _comparisonMetric == null
         ? null
         : _metricById(_comparisonMetric!);
-    final chartData = _buildChartData(
+    final subjectiveChartData = _buildSubjectiveChartData(
       entries: widget.entries,
       primaryMetric: primaryMetric,
       comparisonMetric: secondaryMetric,
       period: _selectedPeriod,
       selectedYear: _selectedYear ?? DateTime.now().year,
     );
+    final fitbitMetrics = [
+      for (final metric in widget.wearableMetrics)
+        if (metric.provider == WearableProvider.fitbit) metric,
+    ];
+    final sleepChartData = _buildWearableChartData(
+      metrics: fitbitMetrics,
+      metric: _wearableMetrics[0],
+      period: _selectedPeriod,
+      selectedYear: _selectedYear ?? DateTime.now().year,
+    );
+    final heartChartData = _buildWearableChartData(
+      metrics: fitbitMetrics,
+      metric: _wearableMetrics[1],
+      period: _selectedPeriod,
+      selectedYear: _selectedYear ?? DateTime.now().year,
+    );
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -68,91 +93,6 @@ class _TrendsPageState extends State<TrendsPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text(
-            secondaryMetric == null
-                ? primaryMetric.label
-                : '${primaryMetric.label} + ${secondaryMetric.label}',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: primaryMetric.color,
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-          const SizedBox(height: 16),
-          _MetricSelectorRow(
-            metrics: _mentalMetrics,
-            selectedMetric: _selectedMetric,
-            onSelected: _handlePrimaryMetricSelected,
-          ),
-          const SizedBox(height: 10),
-          _MetricSelectorRow(
-            metrics: _appetiteMetrics,
-            selectedMetric: _selectedMetric,
-            onSelected: _handlePrimaryMetricSelected,
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              PopupMenuButton<_TrendMetricId?>(
-                onSelected: _handleCompareMetricSelected,
-                itemBuilder: (context) {
-                  final availableMetrics = _trendMetrics
-                      .where((metric) => metric.id != _selectedMetric)
-                      .toList();
-
-                  return [
-                    for (final metric in availableMetrics)
-                      PopupMenuItem<_TrendMetricId?>(
-                        value: metric.id,
-                        child: Text(metric.label),
-                      ),
-                    if (_comparisonMetric != null)
-                      const PopupMenuItem<_TrendMetricId?>(
-                        value: null,
-                        child: Text('Remove compare'),
-                      ),
-                  ];
-                },
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: colorScheme.outlineVariant),
-                    color: colorScheme.surface,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.add, size: 18),
-                      const SizedBox(width: 8),
-                      Text(
-                        _comparisonMetric == null
-                            ? 'Compare'
-                            : 'Compare: ${secondaryMetric!.label}',
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              if (secondaryMetric != null)
-                InputChip(
-                  label: Text(secondaryMetric.label),
-                  avatar: CircleAvatar(
-                    radius: 8,
-                    backgroundColor: secondaryMetric.color,
-                  ),
-                  onDeleted: () {
-                    setState(() {
-                      _comparisonMetric = null;
-                    });
-                  },
-                ),
-            ],
-          ),
-          const SizedBox(height: 16),
           SegmentedButton<_TrendPeriod>(
             segments: const [
               ButtonSegment<_TrendPeriod>(
@@ -211,25 +151,113 @@ class _TrendsPageState extends State<TrendsPage> {
             ),
           ],
           const SizedBox(height: 16),
-          Container(
-            decoration: BoxDecoration(
-              color: colorScheme.surface,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: colorScheme.outlineVariant),
-            ),
-            padding: const EdgeInsets.all(16),
+          _TrendCard(
+            title: 'Manual Trends',
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(
+                  secondaryMetric == null
+                      ? primaryMetric.label
+                      : '${primaryMetric.label} + ${secondaryMetric.label}',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        color: primaryMetric.color,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: 16),
+                _MetricSelectorRow(
+                  metrics: _mentalMetrics,
+                  selectedMetric: _selectedMetric,
+                  onSelected: _handlePrimaryMetricSelected,
+                ),
+                const SizedBox(height: 10),
+                _MetricSelectorRow(
+                  metrics: _appetiteMetrics,
+                  selectedMetric: _selectedMetric,
+                  onSelected: _handlePrimaryMetricSelected,
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    PopupMenuButton<_TrendMetricId?>(
+                      onSelected: _handleCompareMetricSelected,
+                      itemBuilder: (context) {
+                        final availableMetrics = _trendMetrics
+                            .where((metric) => metric.id != _selectedMetric)
+                            .toList();
+
+                        return [
+                          for (final metric in availableMetrics)
+                            PopupMenuItem<_TrendMetricId?>(
+                              value: metric.id,
+                              child: Text(metric.label),
+                            ),
+                          if (_comparisonMetric != null)
+                            const PopupMenuItem<_TrendMetricId?>(
+                              value: null,
+                              child: Text('Remove compare'),
+                            ),
+                        ];
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: colorScheme.outlineVariant),
+                          color: colorScheme.surface,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.add, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              _comparisonMetric == null
+                                  ? 'Compare'
+                                  : 'Compare: ${secondaryMetric!.label}',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (secondaryMetric != null)
+                      InputChip(
+                        label: Text(secondaryMetric.label),
+                        avatar: CircleAvatar(
+                          radius: 8,
+                          backgroundColor: secondaryMetric.color,
+                        ),
+                        onDeleted: () {
+                          setState(() {
+                            _comparisonMetric = null;
+                          });
+                        },
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 16),
                 SizedBox(
                   height: 320,
                   child: CustomPaint(
                     painter: _TrendChartPainter(
-                      series: chartData.series,
-                      xAxisLabels: chartData.xAxisLabels,
-                      verticalMarkers: chartData.verticalMarkers,
-                      emptyMessage: chartData.hasAnyData
+                      series: subjectiveChartData.series,
+                      xAxisLabels: subjectiveChartData.xAxisLabels,
+                      verticalMarkers: subjectiveChartData.verticalMarkers,
+                      emptyMessage: subjectiveChartData.hasAnyData
                           ? null
-                          : 'No logs in this period.',
+                          : 'No manual logs in this period.',
+                      yAxisSpec: const _ChartYAxisSpec.fixed(
+                        min: 1,
+                        max: 5,
+                        ticks: [1, 2, 3, 4, 5],
+                      ),
                     ),
                     child: const SizedBox.expand(),
                   ),
@@ -251,6 +279,33 @@ class _TrendsPageState extends State<TrendsPage> {
               ],
             ),
           ),
+          const SizedBox(height: 16),
+          _TrendCard(
+            title: 'Wearable Trends',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Fitbit daily metrics',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 16),
+                _WearableMetricSection(
+                  title: 'Sleep Duration',
+                  unitLabel: 'min',
+                  color: _wearableMetrics[0].color,
+                  chartData: sleepChartData,
+                ),
+                const SizedBox(height: 20),
+                _WearableMetricSection(
+                  title: 'Resting Heart Rate',
+                  unitLabel: 'bpm',
+                  color: _wearableMetrics[1].color,
+                  chartData: heartChartData,
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -269,6 +324,86 @@ class _TrendsPageState extends State<TrendsPage> {
     setState(() {
       _comparisonMetric = metric;
     });
+  }
+}
+
+class _TrendCard extends StatelessWidget {
+  const _TrendCard({
+    required this.title,
+    required this.child,
+  });
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 16),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _WearableMetricSection extends StatelessWidget {
+  const _WearableMetricSection({
+    required this.title,
+    required this.unitLabel,
+    required this.color,
+    required this.chartData,
+  });
+
+  final String title;
+  final String unitLabel;
+  final Color color;
+  final _TrendChartData chartData;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '$title ($unitLabel)',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 220,
+          child: CustomPaint(
+            painter: _TrendChartPainter(
+              series: chartData.series,
+              xAxisLabels: chartData.xAxisLabels,
+              verticalMarkers: chartData.verticalMarkers,
+              emptyMessage: chartData.hasAnyData
+                  ? null
+                  : 'No wearable data in this period.',
+              yAxisSpec: chartData.yAxisSpec!,
+            ),
+            child: const SizedBox.expand(),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -388,14 +523,16 @@ class _TrendChartPainter extends CustomPainter {
     required this.xAxisLabels,
     required this.verticalMarkers,
     required this.emptyMessage,
+    required this.yAxisSpec,
   });
 
   final List<_ChartSeries> series;
   final List<_AxisLabel> xAxisLabels;
   final List<double> verticalMarkers;
   final String? emptyMessage;
+  final _ChartYAxisSpec yAxisSpec;
 
-  static const _leftPadding = 22.0;
+  static const _leftPadding = 32.0;
   static const _topPadding = 8.0;
   static const _rightPadding = 10.0;
   static const _bottomPadding = 28.0;
@@ -417,17 +554,16 @@ class _TrendChartPainter extends CustomPainter {
       fontSize: 12,
     );
 
-    for (var value = 1; value <= 5; value++) {
-      final y = _yForValue(chartRect, value.toDouble());
+    for (final value in yAxisSpec.ticks) {
+      final y = _yForValue(chartRect, value, yAxisSpec.min, yAxisSpec.max);
       canvas.drawLine(
         Offset(chartRect.left, y),
         Offset(chartRect.right, y),
         gridPaint,
       );
-
       _paintText(
         canvas,
-        '$value',
+        yAxisSpec.labelFor(value),
         Offset(0, y - 8),
         axisTextStyle,
       );
@@ -479,18 +615,18 @@ class _TrendChartPainter extends CustomPainter {
     }
   }
 
-  void _paintSeries(Canvas canvas, Rect chartRect, _ChartSeries series) {
-    final pointPaint = Paint()..color = series.color;
+  void _paintSeries(Canvas canvas, Rect chartRect, _ChartSeries chartSeries) {
+    final pointPaint = Paint()..color = chartSeries.color;
     final linePaint = Paint()
-      ..color = series.color.withValues(alpha: 0.42)
+      ..color = chartSeries.color.withValues(alpha: 0.42)
       ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke;
 
     Offset? previousPoint;
     int? previousIndex;
 
-    for (var index = 0; index < series.values.length; index++) {
-      final value = series.values[index];
+    for (var index = 0; index < chartSeries.values.length; index++) {
+      final value = chartSeries.values[index];
       if (value == null) {
         previousPoint = null;
         previousIndex = null;
@@ -498,8 +634,8 @@ class _TrendChartPainter extends CustomPainter {
       }
 
       final point = Offset(
-        _xForRatio(chartRect, _ratioForIndex(index, series.values.length)),
-        _yForValue(chartRect, value),
+        _xForRatio(chartRect, _ratioForIndex(index, chartSeries.values.length)),
+        _yForValue(chartRect, value, yAxisSpec.min, yAxisSpec.max),
       );
 
       if (previousPoint != null && previousIndex == index - 1) {
@@ -516,7 +652,12 @@ class _TrendChartPainter extends CustomPainter {
     final tickPaint = Paint()
       ..color = const Color(0xFF7C8294).withValues(alpha: 0.55)
       ..strokeWidth = 1;
-    final centerY = _yForValue(chartRect, 3);
+    final centerY = _yForValue(
+      chartRect,
+      (yAxisSpec.min + yAxisSpec.max) / 2,
+      yAxisSpec.min,
+      yAxisSpec.max,
+    );
 
     final totalSlots = series.isEmpty ? 0 : series.first.values.length;
     for (var index = 0; index < totalSlots; index++) {
@@ -541,8 +682,14 @@ class _TrendChartPainter extends CustomPainter {
     return index / (total - 1);
   }
 
-  static double _yForValue(Rect chartRect, double value) {
-    final normalized = (value - 1) / 4;
+  static double _yForValue(
+    Rect chartRect,
+    double value,
+    double min,
+    double max,
+  ) {
+    final span = (max - min).abs() < 0.0001 ? 1 : max - min;
+    final normalized = (value - min) / span;
     return chartRect.bottom - (chartRect.height * normalized);
   }
 
@@ -564,11 +711,12 @@ class _TrendChartPainter extends CustomPainter {
     return oldDelegate.series != series ||
         oldDelegate.xAxisLabels != xAxisLabels ||
         oldDelegate.verticalMarkers != verticalMarkers ||
-        oldDelegate.emptyMessage != emptyMessage;
+        oldDelegate.emptyMessage != emptyMessage ||
+        oldDelegate.yAxisSpec != yAxisSpec;
   }
 }
 
-_TrendChartData _buildChartData({
+_TrendChartData _buildSubjectiveChartData({
   required List<DailyLogEntry> entries,
   required _TrendMetric primaryMetric,
   required _TrendMetric? comparisonMetric,
@@ -578,8 +726,13 @@ _TrendChartData _buildChartData({
   final slotDates = _buildSlotDates(period, selectedYear);
   final series = <_ChartSeries>[
     _ChartSeries(
-      metric: primaryMetric,
-      values: _buildSeriesValues(entries, primaryMetric.id.key, period, slotDates),
+      label: primaryMetric.label,
+      values: _buildSubjectiveSeriesValues(
+        entries,
+        primaryMetric.id.key,
+        period,
+        slotDates,
+      ),
       color: primaryMetric.color,
     ),
   ];
@@ -587,8 +740,8 @@ _TrendChartData _buildChartData({
   if (comparisonMetric != null) {
     series.add(
       _ChartSeries(
-        metric: comparisonMetric,
-        values: _buildSeriesValues(
+        label: comparisonMetric.label,
+        values: _buildSubjectiveSeriesValues(
           entries,
           comparisonMetric.id.key,
           period,
@@ -604,6 +757,35 @@ _TrendChartData _buildChartData({
     xAxisLabels: _buildXAxisLabels(period, slotDates),
     verticalMarkers: _buildVerticalMarkers(period, slotDates),
     hasAnyData: series.any((series) => series.values.any((value) => value != null)),
+  );
+}
+
+_TrendChartData _buildWearableChartData({
+  required List<DailyWearableMetric> metrics,
+  required _WearableTrendMetric metric,
+  required _TrendPeriod period,
+  required int selectedYear,
+}) {
+  final slotDates = _buildSlotDates(period, selectedYear);
+  final values = _buildWearableSeriesValues(
+    metrics,
+    metric.metricType,
+    period,
+    slotDates,
+  );
+
+  return _TrendChartData(
+    series: [
+      _ChartSeries(
+        label: metric.label,
+        values: values,
+        color: metric.color,
+      ),
+    ],
+    xAxisLabels: _buildXAxisLabels(period, slotDates),
+    verticalMarkers: _buildVerticalMarkers(period, slotDates),
+    hasAnyData: values.any((value) => value != null),
+    yAxisSpec: _buildWearableYAxisSpec(metric.metricType, values),
   );
 }
 
@@ -628,7 +810,9 @@ List<DateTime> _buildSlotDates(_TrendPeriod period, int selectedYear) {
       ];
     case _TrendPeriod.oneYear:
       final start = DateTime(selectedYear, 1, 1);
-      final end = selectedYear == today.year ? today : DateTime(selectedYear, 12, 31);
+      final end = selectedYear == today.year
+          ? today
+          : DateTime(selectedYear, 12, 31);
       final slots = <DateTime>[];
       var cursor = start;
       while (!cursor.isAfter(end)) {
@@ -639,7 +823,7 @@ List<DateTime> _buildSlotDates(_TrendPeriod period, int selectedYear) {
   }
 }
 
-List<double?> _buildSeriesValues(
+List<double?> _buildSubjectiveSeriesValues(
   List<DailyLogEntry> entries,
   String metricKey,
   _TrendPeriod period,
@@ -658,7 +842,7 @@ List<double?> _buildSeriesValues(
     case _TrendPeriod.threeMonths:
       return [
         for (final start in slotDates)
-          _averageForRange(
+          _averageEntryRange(
             entries: entries,
             metricKey: metricKey,
             start: start,
@@ -668,7 +852,7 @@ List<double?> _buildSeriesValues(
     case _TrendPeriod.oneYear:
       return [
         for (final start in slotDates)
-          _averageForRange(
+          _averageEntryRange(
             entries: entries,
             metricKey: metricKey,
             start: start,
@@ -678,7 +862,48 @@ List<double?> _buildSeriesValues(
   }
 }
 
-double? _averageForRange({
+List<double?> _buildWearableSeriesValues(
+  List<DailyWearableMetric> metrics,
+  WearableMetricType metricType,
+  _TrendPeriod period,
+  List<DateTime> slotDates,
+) {
+  final filteredMetrics = [
+    for (final metric in metrics)
+      if (metric.metricType == metricType) metric,
+  ];
+
+  switch (period) {
+    case _TrendPeriod.sevenDays:
+    case _TrendPeriod.thirtyDays:
+      final metricByDate = {
+        for (final metric in filteredMetrics) _dateKey(metric.date): metric,
+      };
+      return [
+        for (final date in slotDates) metricByDate[_dateKey(date)]?.value,
+      ];
+    case _TrendPeriod.threeMonths:
+      return [
+        for (final start in slotDates)
+          _averageWearableRange(
+            metrics: filteredMetrics,
+            start: start,
+            end: start.add(const Duration(days: 6)),
+          ),
+      ];
+    case _TrendPeriod.oneYear:
+      return [
+        for (final start in slotDates)
+          _averageWearableRange(
+            metrics: filteredMetrics,
+            start: start,
+            end: start.add(const Duration(days: 13)),
+          ),
+      ];
+  }
+}
+
+double? _averageEntryRange({
   required List<DailyLogEntry> entries,
   required String metricKey,
   required DateTime start,
@@ -702,11 +927,28 @@ double? _averageForRange({
     count += 1;
   }
 
-  if (count == 0) {
-    return null;
+  return count == 0 ? null : total / count;
+}
+
+double? _averageWearableRange({
+  required List<DailyWearableMetric> metrics,
+  required DateTime start,
+  required DateTime end,
+}) {
+  var total = 0.0;
+  var count = 0;
+
+  for (final metric in metrics) {
+    final date = _dateOnly(metric.date);
+    if (date.isBefore(start) || date.isAfter(end)) {
+      continue;
+    }
+
+    total += metric.value;
+    count += 1;
   }
 
-  return total / count;
+  return count == 0 ? null : total / count;
 }
 
 List<double> _buildVerticalMarkers(_TrendPeriod period, List<DateTime> slotDates) {
@@ -719,13 +961,8 @@ List<double> _buildVerticalMarkers(_TrendPeriod period, List<DateTime> slotDates
     case _TrendPeriod.thirtyDays:
       return const [];
     case _TrendPeriod.threeMonths:
-      return _buildMonthMarkerRatios(
-        slotDates: slotDates,
-      );
     case _TrendPeriod.oneYear:
-      return _buildMonthMarkerRatios(
-        slotDates: slotDates,
-      );
+      return _buildMonthMarkerRatios(slotDates: slotDates);
   }
 }
 
@@ -738,25 +975,13 @@ List<_AxisLabel> _buildXAxisLabels(_TrendPeriod period, List<DateTime> slotDates
     case _TrendPeriod.sevenDays:
     case _TrendPeriod.thirtyDays:
       return [
-        _AxisLabel(
-          text: _formatShortDate(slotDates.first),
-          positionRatio: 0,
-        ),
-        _AxisLabel(
-          text: _formatShortDate(slotDates.last),
-          positionRatio: 1,
-        ),
+        _AxisLabel(text: _formatShortDate(slotDates.first), positionRatio: 0),
+        _AxisLabel(text: _formatShortDate(slotDates.last), positionRatio: 1),
       ];
     case _TrendPeriod.threeMonths:
-      return _buildMonthLabels(
-        slotDates: slotDates,
-        monthStep: 1,
-      );
+      return _buildMonthLabels(slotDates: slotDates, monthStep: 1);
     case _TrendPeriod.oneYear:
-      return _buildMonthLabels(
-        slotDates: slotDates,
-        monthStep: 3,
-      );
+      return _buildMonthLabels(slotDates: slotDates, monthStep: 3);
   }
 }
 
@@ -766,7 +991,6 @@ List<double> _buildMonthMarkerRatios({
   final start = slotDates.first;
   final end = slotDates.last;
   final markers = <double>[];
-
   var cursor = DateTime(start.year, start.month, 1);
   if (cursor.isBefore(start)) {
     cursor = DateTime(start.year, start.month + 1, 1);
@@ -790,7 +1014,6 @@ List<_AxisLabel> _buildMonthLabels({
   final start = slotDates.first;
   final end = slotDates.last;
   final labels = <_AxisLabel>[];
-
   var cursor = DateTime(start.year, start.month, 1);
   if (cursor.isBefore(start)) {
     cursor = DateTime(start.year, start.month + 1, 1);
@@ -812,6 +1035,56 @@ List<_AxisLabel> _buildMonthLabels({
 
   return labels;
 }
+
+_ChartYAxisSpec _buildWearableYAxisSpec(
+  WearableMetricType metricType,
+  List<double?> values,
+) {
+  final presentValues = <double>[
+    ...values.whereType<double>(),
+  ];
+  if (presentValues.isEmpty) {
+    switch (metricType) {
+      case WearableMetricType.sleepDurationMin:
+        return const _ChartYAxisSpec.fixed(
+          min: 0,
+          max: 600,
+          ticks: [0, 300, 600],
+        );
+      case WearableMetricType.restingHeartRateBpm:
+        return const _ChartYAxisSpec.fixed(
+          min: 40,
+          max: 80,
+          ticks: [40, 60, 80],
+        );
+    }
+  }
+
+  var minValue = presentValues.first;
+  var maxValue = presentValues.first;
+  for (final value in presentValues.skip(1)) {
+    if (value < minValue) {
+      minValue = value;
+    }
+    if (value > maxValue) {
+      maxValue = value;
+    }
+  }
+
+  final range = (maxValue - minValue).abs();
+  final padding = range < 1 ? _maxValue(1, maxValue * 0.1) : range * 0.2;
+  final min = (minValue - padding).floorToDouble();
+  final max = (maxValue + padding).ceilToDouble();
+  final mid = (min + max) / 2;
+
+  return _ChartYAxisSpec.fixed(
+    min: min,
+    max: max,
+    ticks: [min, mid, max],
+  );
+}
+
+double _maxValue(num a, num b) => a > b ? a.toDouble() : b.toDouble();
 
 double _ratioForDate(DateTime start, DateTime end, DateTime date) {
   final totalDays = end.difference(start).inDays;
@@ -896,28 +1169,42 @@ class _TrendMetric {
   final Color color;
 }
 
+class _WearableTrendMetric {
+  const _WearableTrendMetric({
+    required this.metricType,
+    required this.label,
+    required this.color,
+  });
+
+  final WearableMetricType metricType;
+  final String label;
+  final Color color;
+}
+
 class _TrendChartData {
   const _TrendChartData({
     required this.series,
     required this.xAxisLabels,
     required this.verticalMarkers,
     required this.hasAnyData,
+    this.yAxisSpec,
   });
 
   final List<_ChartSeries> series;
   final List<_AxisLabel> xAxisLabels;
   final List<double> verticalMarkers;
   final bool hasAnyData;
+  final _ChartYAxisSpec? yAxisSpec;
 }
 
 class _ChartSeries {
   const _ChartSeries({
-    required this.metric,
+    required this.label,
     required this.values,
     required this.color,
   });
 
-  final _TrendMetric metric;
+  final String label;
   final List<double?> values;
   final Color color;
 }
@@ -930,6 +1217,34 @@ class _AxisLabel {
 
   final String text;
   final double positionRatio;
+}
+
+class _ChartYAxisSpec {
+  const _ChartYAxisSpec.fixed({
+    required this.min,
+    required this.max,
+    required this.ticks,
+  }) : labelBuilder = null;
+
+  final double min;
+  final double max;
+  final List<double> ticks;
+  final String Function(double value)? labelBuilder;
+
+  String labelFor(double value) {
+    return labelBuilder?.call(value) ?? value.round().toString();
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is _ChartYAxisSpec &&
+        other.min == min &&
+        other.max == max &&
+        _listEquals(other.ticks, ticks);
+  }
+
+  @override
+  int get hashCode => Object.hash(min, max, ticks.length);
 }
 
 const _trendMetrics = <_TrendMetric>[
@@ -960,6 +1275,19 @@ const _trendMetrics = <_TrendMetric>[
   ),
 ];
 
+const _wearableMetrics = <_WearableTrendMetric>[
+  _WearableTrendMetric(
+    metricType: WearableMetricType.sleepDurationMin,
+    label: 'Sleep Duration',
+    color: Color(0xFF4D74C8),
+  ),
+  _WearableTrendMetric(
+    metricType: WearableMetricType.restingHeartRateBpm,
+    label: 'Resting Heart Rate',
+    color: Color(0xFFB46943),
+  ),
+];
+
 final _mentalMetrics = <_TrendMetric>[
   _trendMetrics[0],
   _trendMetrics[1],
@@ -970,6 +1298,21 @@ final _appetiteMetrics = <_TrendMetric>[
   _trendMetrics[3],
   _trendMetrics[4],
 ];
+
+bool _listEquals(List<double> a, List<double> b) {
+  if (identical(a, b)) {
+    return true;
+  }
+  if (a.length != b.length) {
+    return false;
+  }
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) {
+      return false;
+    }
+  }
+  return true;
+}
 
 extension<T> on List<T> {
   T? get lastOrNull => isEmpty ? null : last;
