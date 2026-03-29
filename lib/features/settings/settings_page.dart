@@ -99,28 +99,15 @@ class _SettingsPageState extends State<SettingsPage> {
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 16),
-                  ValueListenableBuilder<FitbitOAuthPreparation?>(
-                    valueListenable: fitbitOAuthSessionStore.preparedSession,
-                    builder: (context, preparation, _) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          OutlinedButton(
-                            onPressed: () {
-                              fitbitOAuthSessionStore.prepareAuthorization();
-                            },
-                            child: const Text('Prepare authorization'),
-                          ),
-                          const SizedBox(height: 8),
-                          FilledButton.tonal(
-                            onPressed: preparation == null
-                                ? null
-                                : () => _openFitbitAuthorization(preparation),
-                            child: const Text('Open Fitbit authorization'),
-                          ),
-                        ],
-                      );
-                    },
+                  FilledButton(
+                    onPressed: _isHandlingFitbitCallback || _isSyncingFitbit
+                        ? null
+                        : _handleFitbitPrimaryAction,
+                    child: Text(
+                      _isHandlingFitbitCallback
+                          ? 'Connecting Fitbit...'
+                          : _fitbitPrimaryActionLabel,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   ValueListenableBuilder<FitbitCallbackDebug?>(
@@ -166,21 +153,12 @@ class _SettingsPageState extends State<SettingsPage> {
                     },
                   ),
                   const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: _isSyncingFitbit ? null : _syncFitbitData,
-                    child: Text(
-                      _isSyncingFitbit
-                          ? 'Syncing Fitbit data...'
-                          : 'Sync Fitbit data',
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  FilledButton.tonal(
+                  OutlinedButton(
                     onPressed: _isBackfillingFitbit ? null : _backfillFitbitData,
                     child: Text(
                       _isBackfillingFitbit
                           ? 'Backfilling Fitbit data...'
-                          : 'Backfill Fitbit data (Last 30 days)',
+                          : 'Backfill last 30 days',
                     ),
                   ),
                   if (_isBackfillingFitbit) ...[
@@ -191,7 +169,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ],
                   const SizedBox(height: 8),
-                  OutlinedButton(
+                  TextButton(
                     onPressed: _fitbitConnection == null
                         ? null
                         : _disconnectFitbit,
@@ -428,6 +406,38 @@ class _SettingsPageState extends State<SettingsPage> {
     return 'Connected';
   }
 
+  bool get _hasFitbitConnection => _fitbitConnection?.isConnected == true;
+
+  bool get _isFitbitSyncedToday {
+    final lastSyncedAt = _fitbitConnection?.lastSyncedAt;
+    if (lastSyncedAt == null) {
+      return false;
+    }
+
+    final now = DateTime.now();
+    return lastSyncedAt.year == now.year &&
+        lastSyncedAt.month == now.month &&
+        lastSyncedAt.day == now.day;
+  }
+
+  String get _fitbitPrimaryActionLabel {
+    if (!_hasFitbitConnection) {
+      return 'Connect Fitbit';
+    }
+
+    return _isFitbitSyncedToday ? 'Sync again' : 'Sync Fitbit';
+  }
+
+  Future<void> _handleFitbitPrimaryAction() async {
+    if (!_hasFitbitConnection) {
+      final preparation = fitbitOAuthSessionStore.prepareAuthorization();
+      await _openFitbitAuthorization(preparation);
+      return;
+    }
+
+    await _syncFitbitData();
+  }
+
   Future<FitbitOAuthToken> _requireValidFitbitToken({
     required String missingMessage,
     required String expiredMessage,
@@ -565,6 +575,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _isHandlingFitbitCallback = false;
         _fitbitSyncResult = 'Fitbit authorization completed';
       });
+      await _syncFitbitData();
     } on FitbitOAuthException catch (error) {
       if (!mounted) {
         return;
