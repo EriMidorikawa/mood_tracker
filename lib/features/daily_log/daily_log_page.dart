@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mood_tracker/app/settings_menu_button.dart';
 import 'package:mood_tracker/features/daily_log/data/daily_log_seed.dart';
 import 'package:mood_tracker/features/daily_log/models/daily_log_entry.dart';
 import 'package:mood_tracker/features/daily_log/models/daily_log_question.dart';
@@ -86,7 +87,10 @@ class _DailyLogPageState extends State<DailyLogPage> {
     final logDate = _formatDate(_selectedLogDate);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Daily Log')),
+      appBar: AppBar(
+        title: const Text('Daily Log'),
+        actions: const [SettingsMenuButton()],
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         children: [

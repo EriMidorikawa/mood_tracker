@@ -3,7 +3,7 @@ import 'package:mood_tracker/features/dashboard/dashboard_page.dart';
 import 'package:mood_tracker/features/daily_log/data/local_daily_log_repository.dart';
 import 'package:mood_tracker/features/daily_log/models/daily_log_entry.dart';
 import 'package:mood_tracker/features/daily_log/daily_log_page.dart';
-import 'package:mood_tracker/features/settings/settings_page.dart';
+import 'package:mood_tracker/features/history/history_page.dart';
 import 'package:mood_tracker/features/trends/trends_page.dart';
 
 class MoodTrackerApp extends StatelessWidget {
@@ -60,9 +60,9 @@ class _AppShellState extends State<AppShell> {
       label: 'Trends',
     ),
     NavigationDestination(
-      icon: Icon(Icons.settings_outlined),
-      selectedIcon: Icon(Icons.settings),
-      label: 'Settings',
+      icon: Icon(Icons.history_outlined),
+      selectedIcon: Icon(Icons.history),
+      label: 'History',
     ),
   ];
 
@@ -131,17 +131,19 @@ class _AppShellState extends State<AppShell> {
     }
 
     final pages = <Widget>[
-      DashboardPage(latestEntry: _latestEntry),
+      DashboardPage(
+        latestEntry: _latestEntry,
+      ),
       DailyLogPage(
         key: ValueKey(_activeEntry?.loggedAt.toIso8601String() ?? 'new-entry'),
         initialEntry: _activeEntry,
         onSave: _handleSave,
       ),
-      TrendsPage(
+      const TrendsPage(),
+      HistoryPage(
         entries: _entries,
         onOpenEntry: _openEntryForDate,
       ),
-      const SettingsPage(),
     ];
 
     return ScaffoldMessenger(
