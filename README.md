@@ -15,3 +15,5 @@ A few resources to get you started if this is your first Flutter project:
 For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
+
+To update the Android app icon later, replace `assets/icons/app_icon.png` and rerun `flutter pub run flutter_launcher_icons`.
