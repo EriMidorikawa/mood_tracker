@@ -170,4 +170,40 @@ void main() {
       isFalse,
     );
   });
+
+  test('loads daily metrics in ascending date order for a range', () async {
+    await repository.upsertDailyMetrics([
+      DailyWearableMetric(
+        provider: WearableProvider.fitbit,
+        metricType: WearableMetricType.sleepDurationMin,
+        date: DateTime(2026, 3, 29),
+        value: 401,
+        unit: 'min',
+        sourceId: 'fitbit',
+      ),
+      DailyWearableMetric(
+        provider: WearableProvider.fitbit,
+        metricType: WearableMetricType.sleepDurationMin,
+        date: DateTime(2026, 3, 28),
+        value: 432,
+        unit: 'min',
+        sourceId: 'fitbit',
+      ),
+    ]);
+
+    final metrics = await repository.loadDailyMetricsInRange(
+      startDate: DateTime(2026, 3, 27),
+      endDate: DateTime(2026, 3, 29),
+      provider: WearableProvider.fitbit,
+      metricType: WearableMetricType.sleepDurationMin,
+    );
+
+    expect(metrics, hasLength(2));
+    expect(metrics[0].date, DateTime(2026, 3, 28));
+    expect(metrics[0].value, 432);
+    expect(metrics[1].date, DateTime(2026, 3, 29));
+    expect(metrics[1].value, 401);
+    expect(metrics[0].sourceId, 'fitbit');
+    expect(metrics[1].sourceId, 'fitbit');
+  });
 }

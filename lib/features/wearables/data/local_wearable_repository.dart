@@ -148,6 +148,29 @@ class LocalWearableRepository {
     ];
   }
 
+  Future<List<DailyWearableMetric>> loadDailyMetricsInRange({
+    required DateTime startDate,
+    required DateTime endDate,
+    WearableProvider? provider,
+    WearableMetricType? metricType,
+  }) async {
+    final start = _dateOnly(startDate);
+    final end = _dateOnly(endDate);
+    final metrics = await loadDailyMetrics(
+      provider: provider,
+      metricType: metricType,
+    );
+
+    final filtered = [
+      for (final metric in metrics)
+        if (!_dateOnly(metric.date).isBefore(start) &&
+            !_dateOnly(metric.date).isAfter(end))
+          metric,
+    ]..sort((a, b) => _dateOnly(a.date).compareTo(_dateOnly(b.date)));
+
+    return filtered;
+  }
+
   Future<void> saveDailyMetrics(List<DailyWearableMetric> metrics) async {
     final preferences = await SharedPreferences.getInstance();
     await preferences.setString(

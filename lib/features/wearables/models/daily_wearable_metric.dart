@@ -8,6 +8,7 @@ class DailyWearableMetric {
     required this.date,
     required this.value,
     required this.unit,
+    this.sourceId,
   });
 
   final WearableProvider provider;
@@ -15,6 +16,7 @@ class DailyWearableMetric {
   final DateTime date;
   final double value;
   final String unit;
+  final String? sourceId;
 
   Map<String, dynamic> toJson() {
     return {
@@ -23,6 +25,7 @@ class DailyWearableMetric {
       'date': date.toIso8601String(),
       'value': value,
       'unit': unit,
+      'sourceId': sourceId,
     };
   }
 
@@ -35,6 +38,7 @@ class DailyWearableMetric {
       date: DateTime.parse(json['date'] as String),
       value: (json['value'] as num).toDouble(),
       unit: json['unit'] as String,
+      sourceId: json['sourceId'] as String?,
     );
   }
 }
