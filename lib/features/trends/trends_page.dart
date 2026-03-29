@@ -78,6 +78,10 @@ class _TrendsPageState extends State<TrendsPage> {
                 value: _TrendRange.threeMonths,
                 label: Text('3M'),
               ),
+              ButtonSegment<_TrendRange>(
+                value: _TrendRange.thisYear,
+                label: Text('This Year'),
+              ),
             ],
             selected: {_selectedRange},
             onSelectionChanged: (selection) {
@@ -129,7 +133,10 @@ class _TrendsPageState extends State<TrendsPage> {
                     value: latestValue == null
                         ? '--'
                         : latestValue.toStringAsFixed(
-                            _selectedRange == _TrendRange.threeMonths ? 1 : 0,
+                            _selectedRange == _TrendRange.sevenDays ||
+                                    _selectedRange == _TrendRange.thirtyDays
+                                ? 0
+                                : 1,
                           ),
                   ),
                   _SummaryPill(
@@ -381,6 +388,7 @@ class _MonthAxisLabels extends StatelessWidget {
           return Stack(
             children: [
               for (final marker in monthMarkers)
+                if (marker.showLabel)
                 Positioned(
                   left: (constraints.maxWidth * marker.position).clamp(
                     0.0,
@@ -473,16 +481,19 @@ class _MonthMarker {
   const _MonthMarker({
     required this.position,
     required this.label,
+    required this.showLabel,
   });
 
   final double position;
   final String label;
+  final bool showLabel;
 }
 
 enum _TrendRange {
   sevenDays,
   thirtyDays,
   threeMonths,
+  thisYear,
 }
 
 const _trendMetrics = <_TrendMetric>[
@@ -546,6 +557,11 @@ _TrendSeries _buildTrendSeries({
       return _buildWeeklySeries(
         entries: entries,
         weeks: 13,
+        metricKey: metricKey,
+      );
+    case _TrendRange.thisYear:
+      return _buildThisYearSeries(
+        entries: entries,
         metricKey: metricKey,
       );
   }
@@ -629,6 +645,7 @@ _TrendSeries _buildWeeklySeries({
   final monthMarkers = _buildMonthMarkers(
     startDate: points.first.date,
     endDate: points.last.date,
+    labelEveryMonths: 1,
   );
 
   return _TrendSeries(
@@ -636,6 +653,55 @@ _TrendSeries _buildWeeklySeries({
     startLabel: _formatShortDate(points.first.date),
     endLabel: _formatShortDate(points.last.date),
     summaryLabel: 'Logged weeks',
+    loggedCount: points.where((point) => point.value != null).length,
+    showRangeLabels: false,
+    monthMarkers: monthMarkers,
+  );
+}
+
+_TrendSeries _buildThisYearSeries({
+  required List<DailyLogEntry> entries,
+  required String metricKey,
+}) {
+  final today = _dateOnly(DateTime.now());
+  final yearStart = DateTime(today.year, 1, 1);
+  final bucketValues = <String, List<int>>{};
+
+  for (final entry in entries) {
+    final entryDate = _dateOnly(entry.loggedAt);
+    if (entryDate.isBefore(yearStart) || entryDate.isAfter(today)) {
+      continue;
+    }
+
+    final value = entry.responses[metricKey];
+    if (value != null) {
+      final periodStart = _startOfTwoWeekPeriod(entryDate, yearStart);
+      bucketValues.putIfAbsent(_dateKey(periodStart), () => []).add(value);
+    }
+  }
+
+  final points = <_MetricPoint>[];
+  var cursor = yearStart;
+  while (!cursor.isAfter(today)) {
+    final values = bucketValues[_dateKey(cursor)];
+    final average = values == null || values.isEmpty
+        ? null
+        : values.reduce((sum, value) => sum + value) / values.length;
+    points.add(_MetricPoint(date: cursor, value: average));
+    cursor = cursor.add(const Duration(days: 14));
+  }
+
+  final monthMarkers = _buildMonthMarkers(
+    startDate: points.first.date,
+    endDate: points.last.date,
+    labelEveryMonths: 3,
+  );
+
+  return _TrendSeries(
+    points: points,
+    startLabel: _formatShortDate(points.first.date),
+    endLabel: _formatShortDate(points.last.date),
+    summaryLabel: 'Logged periods',
     loggedCount: points.where((point) => point.value != null).length,
     showRangeLabels: false,
     monthMarkers: monthMarkers,
@@ -679,6 +745,7 @@ String _formatShortDate(DateTime dateTime) {
 List<_MonthMarker> _buildMonthMarkers({
   required DateTime startDate,
   required DateTime endDate,
+  required int labelEveryMonths,
 }) {
   final markers = <_MonthMarker>[];
   final totalDays = endDate.difference(startDate).inDays.toDouble();
@@ -698,12 +765,19 @@ List<_MonthMarker> _buildMonthMarkers({
       _MonthMarker(
         position: position,
         label: _formatMonthLabel(current),
+        showLabel: ((current.month - 1) % labelEveryMonths) == 0,
       ),
     );
     current = DateTime(current.year, current.month + 1, 1);
   }
 
   return markers;
+}
+
+DateTime _startOfTwoWeekPeriod(DateTime dateTime, DateTime anchorDate) {
+  final offsetDays = dateTime.difference(anchorDate).inDays;
+  final periodIndex = offsetDays ~/ 14;
+  return anchorDate.add(Duration(days: periodIndex * 14));
 }
 
 String _formatMonthLabel(DateTime dateTime) {
