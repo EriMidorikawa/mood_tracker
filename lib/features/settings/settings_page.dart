@@ -3,6 +3,7 @@ import 'package:mood_tracker/features/wearables/data/fitbit_api_client.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_source_adapter.dart';
 import 'package:mood_tracker/features/wearables/data/local_wearable_repository.dart';
 import 'package:mood_tracker/features/wearables/models/daily_wearable_metric.dart';
+import 'package:mood_tracker/features/wearables/models/wearable_connection.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_metric_type.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_provider.dart';
 
@@ -161,11 +162,24 @@ class _SettingsPageState extends State<SettingsPage> {
 
     try {
       final today = _dateOnly(DateTime.now());
+      final now = DateTime.now();
       final fitbitAdapter = FitbitSourceAdapter(
         fetchSnapshot: _fitbitClient.fetchDailySnapshot,
       );
       final metrics = await fitbitAdapter.fetchDailyMetrics(today);
       await _wearableRepository.upsertDailyMetrics(metrics);
+      final existingConnection = await _wearableRepository.loadConnection(
+        WearableProvider.fitbit,
+      );
+      await _wearableRepository.upsertConnection(
+        WearableConnection(
+          provider: WearableProvider.fitbit,
+          isConnected: true,
+          accountLabel: existingConnection?.accountLabel,
+          connectedAt: existingConnection?.connectedAt ?? now,
+          lastSyncedAt: now,
+        ),
+      );
       if (!mounted) {
         return;
       }
