@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_api_client.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_callback_debug_store.dart';
+import 'package:mood_tracker/features/wearables/data/fitbit_oauth_client.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_oauth_session_store.dart';
+import 'package:mood_tracker/features/wearables/data/fitbit_oauth_token_store.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_source_adapter.dart';
 import 'package:mood_tracker/features/wearables/data/local_wearable_repository.dart';
 import 'package:mood_tracker/features/wearables/models/daily_wearable_metric.dart';
@@ -21,17 +23,27 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   final _wearableRepository = LocalWearableRepository();
-  final _fitbitClient = FitbitApiClient();
+  final _fitbitOAuthClient = FitbitOAuthClient();
+  final _fitbitTokenStore = FitbitOAuthTokenStore();
   WearableConnection? _fitbitConnection;
   bool _isSavingSample = false;
   String? _sampleSaveResult;
   bool _isSyncingFitbit = false;
+  bool _isHandlingFitbitCallback = false;
   String? _fitbitSyncResult;
+  String? _lastHandledCallbackUri;
 
   @override
   void initState() {
     super.initState();
     _loadFitbitConnection();
+    fitbitCallbackDebugStore.lastCallback.addListener(_handleFitbitCallback);
+  }
+
+  @override
+  void dispose() {
+    fitbitCallbackDebugStore.lastCallback.removeListener(_handleFitbitCallback);
+    super.dispose();
   }
 
   @override
@@ -276,10 +288,16 @@ class _SettingsPageState extends State<SettingsPage> {
     });
 
     try {
+      final token = await _fitbitTokenStore.loadToken();
+      if (token == null || token.isExpired) {
+        throw const FitbitApiException('Authorize Fitbit first.');
+      }
+
       final today = _dateOnly(DateTime.now());
       final now = DateTime.now();
       final fitbitAdapter = FitbitSourceAdapter(
-        fetchSnapshot: _fitbitClient.fetchDailySnapshot,
+        fetchSnapshot:
+            FitbitApiClient(accessToken: token.accessToken).fetchDailySnapshot,
       );
       final metrics = await fitbitAdapter.fetchDailyMetrics(today);
       await _wearableRepository.upsertDailyMetrics(metrics);
@@ -384,6 +402,80 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() {
       _fitbitSyncResult = 'Could not open Fitbit authorization URL';
     });
+  }
+
+  Future<void> _handleFitbitCallback() async {
+    final callback = fitbitCallbackDebugStore.lastCallback.value;
+    if (callback == null ||
+        callback.code == null ||
+        callback.stateMatched != true ||
+        callback.uri.toString() == _lastHandledCallbackUri ||
+        _isHandlingFitbitCallback) {
+      return;
+    }
+
+    final preparation = fitbitOAuthSessionStore.preparedSession.value;
+    if (preparation == null) {
+      return;
+    }
+
+    _lastHandledCallbackUri = callback.uri.toString();
+    setState(() {
+      _isHandlingFitbitCallback = true;
+      _fitbitSyncResult = 'Completing Fitbit authorization...';
+    });
+
+    try {
+      final token = await _fitbitOAuthClient.exchangeAuthorizationCode(
+        code: callback.code!,
+        codeVerifier: preparation.codeVerifier,
+      );
+      await _fitbitTokenStore.saveToken(token);
+
+      final now = DateTime.now();
+      final existingConnection = await _wearableRepository.loadConnection(
+        WearableProvider.fitbit,
+      );
+      await _wearableRepository.upsertConnection(
+        WearableConnection(
+          provider: WearableProvider.fitbit,
+          isConnected: true,
+          accountLabel: existingConnection?.accountLabel,
+          connectedAt: existingConnection?.connectedAt ?? now,
+          lastSyncedAt: existingConnection?.lastSyncedAt,
+        ),
+      );
+      final updatedConnection = await _wearableRepository.loadConnection(
+        WearableProvider.fitbit,
+      );
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _fitbitConnection = updatedConnection;
+        _isHandlingFitbitCallback = false;
+        _fitbitSyncResult = 'Fitbit authorization completed';
+      });
+    } on FitbitOAuthException catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isHandlingFitbitCallback = false;
+        _fitbitSyncResult = error.message;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isHandlingFitbitCallback = false;
+        _fitbitSyncResult = 'Fitbit token exchange failed';
+      });
+    }
   }
 }
 
