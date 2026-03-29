@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mood_tracker/features/wearables/data/fitbit_api_client.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_source_adapter.dart';
 import 'package:mood_tracker/features/wearables/data/local_wearable_repository.dart';
 import 'package:mood_tracker/features/wearables/models/daily_wearable_metric.dart';
@@ -14,7 +15,7 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   final _wearableRepository = LocalWearableRepository();
-  final _fitbitAdapter = FitbitSourceAdapter(fetchSnapshot: _loadSampleFitbitData);
+  final _fitbitClient = FitbitApiClient();
   bool _isSavingSample = false;
   String? _sampleSaveResult;
   bool _isSyncingFitbit = false;
@@ -158,28 +159,43 @@ class _SettingsPageState extends State<SettingsPage> {
       _fitbitSyncResult = null;
     });
 
-    final today = _dateOnly(DateTime.now());
-    final metrics = await _fitbitAdapter.fetchDailyMetrics(today);
-    await _wearableRepository.upsertDailyMetrics(metrics);
-    if (!mounted) {
-      return;
-    }
+    try {
+      final today = _dateOnly(DateTime.now());
+      final fitbitAdapter = FitbitSourceAdapter(
+        fetchSnapshot: _fitbitClient.fetchDailySnapshot,
+      );
+      final metrics = await fitbitAdapter.fetchDailyMetrics(today);
+      await _wearableRepository.upsertDailyMetrics(metrics);
+      if (!mounted) {
+        return;
+      }
 
-    setState(() {
-      _isSyncingFitbit = false;
-      _fitbitSyncResult = 'Fitbit data synced';
-    });
+      setState(() {
+        _isSyncingFitbit = false;
+        _fitbitSyncResult = 'Fitbit data synced';
+      });
+    } on FitbitApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isSyncingFitbit = false;
+        _fitbitSyncResult = error.message;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isSyncingFitbit = false;
+        _fitbitSyncResult = 'Fitbit sync failed';
+      });
+    }
   }
 }
 
 DateTime _dateOnly(DateTime dateTime) {
   return DateTime(dateTime.year, dateTime.month, dateTime.day);
-}
-
-Future<FitbitDailySnapshot> _loadSampleFitbitData(DateTime date) async {
-  return FitbitDailySnapshot(
-    date: date,
-    sleepDurationMin: 428,
-    restingHeartRateBpm: 57,
-  );
 }
