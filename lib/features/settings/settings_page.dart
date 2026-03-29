@@ -295,7 +295,7 @@ class _SettingsPageState extends State<SettingsPage> {
     });
   }
 
-  Future<void> _syncFitbitData() async {
+  Future<void> _syncFitbitData({bool rethrowFailure = false}) async {
     setState(() {
       _isSyncingFitbit = true;
       _fitbitSyncResult = null;
@@ -349,6 +349,9 @@ class _SettingsPageState extends State<SettingsPage> {
         _isSyncingFitbit = false;
         _fitbitSyncResult = error.message;
       });
+      if (rethrowFailure) {
+        rethrow;
+      }
     } catch (_) {
       if (!mounted) {
         return;
@@ -358,6 +361,9 @@ class _SettingsPageState extends State<SettingsPage> {
         _isSyncingFitbit = false;
         _fitbitSyncResult = 'Fitbit sync failed';
       });
+      if (rethrowFailure) {
+        rethrow;
+      }
     }
   }
 
@@ -679,24 +685,40 @@ class _SettingsPageState extends State<SettingsPage> {
         code: callback.code!,
         codeVerifier: preparation.codeVerifier,
       );
-      await _fitbitTokenStore.saveToken(token);
+      try {
+        await _fitbitTokenStore.saveToken(token);
+      } catch (error) {
+        throw _FitbitCallbackStageException(
+          'Fitbit callback failed while saving token.',
+          error,
+        );
+      }
 
       final now = DateTime.now();
-      final existingConnection = await _wearableRepository.loadConnection(
-        WearableProvider.fitbit,
-      );
-      await _wearableRepository.upsertConnection(
-        WearableConnection(
-          provider: WearableProvider.fitbit,
-          isConnected: true,
-          accountLabel: existingConnection?.accountLabel,
-          connectedAt: existingConnection?.connectedAt ?? now,
-          lastSyncedAt: existingConnection?.lastSyncedAt,
-        ),
-      );
-      final updatedConnection = await _wearableRepository.loadConnection(
-        WearableProvider.fitbit,
-      );
+      final updatedConnection = await (() async {
+        try {
+          final existingConnection = await _wearableRepository.loadConnection(
+            WearableProvider.fitbit,
+          );
+          await _wearableRepository.upsertConnection(
+            WearableConnection(
+              provider: WearableProvider.fitbit,
+              isConnected: true,
+              accountLabel: existingConnection?.accountLabel,
+              connectedAt: existingConnection?.connectedAt ?? now,
+              lastSyncedAt: existingConnection?.lastSyncedAt,
+            ),
+          );
+          return await _wearableRepository.loadConnection(
+            WearableProvider.fitbit,
+          );
+        } catch (error) {
+          throw _FitbitCallbackStageException(
+            'Fitbit callback failed while updating local connection state.',
+            error,
+          );
+        }
+      })();
       if (!mounted) {
         return;
       }
@@ -706,7 +728,14 @@ class _SettingsPageState extends State<SettingsPage> {
         _isHandlingFitbitCallback = false;
         _fitbitSyncResult = 'Fitbit authorization completed';
       });
-      await _syncFitbitData();
+      try {
+        await _syncFitbitData(rethrowFailure: true);
+      } catch (error) {
+        throw _FitbitCallbackStageException(
+          'Fitbit callback failed while syncing today\'s Fitbit data.',
+          error,
+        );
+      }
     } on FitbitOAuthException catch (error) {
       if (!mounted) {
         return;
@@ -716,16 +745,54 @@ class _SettingsPageState extends State<SettingsPage> {
         _isHandlingFitbitCallback = false;
         _fitbitSyncResult = error.message;
       });
-    } catch (_) {
+    } on _FitbitCallbackStageException catch (error) {
       if (!mounted) {
         return;
       }
 
       setState(() {
         _isHandlingFitbitCallback = false;
-        _fitbitSyncResult = 'Fitbit token exchange failed';
+        _fitbitSyncResult = error.toUserMessage();
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isHandlingFitbitCallback = false;
+        _fitbitSyncResult = _formatUnexpectedFitbitCallbackFailure(error);
       });
     }
+  }
+}
+
+String _formatUnexpectedFitbitCallbackFailure(Object error) {
+  final message = switch (error) {
+    final Exception exception => exception.toString(),
+    _ => error.toString(),
+  };
+  final sanitizedMessage = message.trim();
+  if (sanitizedMessage.isEmpty || sanitizedMessage == error.runtimeType.toString()) {
+    return 'Unexpected Fitbit callback failure: ${error.runtimeType}';
+  }
+
+  return 'Unexpected Fitbit callback failure: ${error.runtimeType} ($sanitizedMessage)';
+}
+
+class _FitbitCallbackStageException implements Exception {
+  const _FitbitCallbackStageException(this.prefix, this.cause);
+
+  final String prefix;
+  final Object cause;
+
+  String toUserMessage() {
+    if (cause is FitbitOAuthException) {
+      return (cause as FitbitOAuthException).message;
+    }
+
+    final unexpectedMessage = _formatUnexpectedFitbitCallbackFailure(cause);
+    return '$prefix $unexpectedMessage';
   }
 }
 
