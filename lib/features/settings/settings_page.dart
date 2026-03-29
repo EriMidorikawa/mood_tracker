@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_api_client.dart';
+import 'package:mood_tracker/features/wearables/data/fitbit_callback_debug_store.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_source_adapter.dart';
 import 'package:mood_tracker/features/wearables/data/local_wearable_repository.dart';
 import 'package:mood_tracker/features/wearables/models/daily_wearable_metric.dart';
+import 'package:mood_tracker/features/wearables/models/fitbit_callback_debug.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_connection.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_metric_type.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_provider.dart';
@@ -100,6 +102,42 @@ class _SettingsPageState extends State<SettingsPage> {
                   Text(
                     'Sync today\'s Fitbit wearable metrics once.',
                     style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 12),
+                  ValueListenableBuilder<FitbitCallbackDebug?>(
+                    valueListenable: fitbitCallbackDebugStore.lastCallback,
+                    builder: (context, callback, _) {
+                      if (callback == null) {
+                        return Text(
+                          'Last Fitbit callback URI: Not received yet',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        );
+                      }
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Last Fitbit callback URI: ${callback.uri}',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          if (callback.code != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              'code: ${callback.code}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                          if (callback.state != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              'state: ${callback.state}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: 12),
                   Text(

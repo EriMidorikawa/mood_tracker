@@ -6,6 +6,7 @@ import 'package:mood_tracker/features/daily_log/daily_log_page.dart';
 import 'package:mood_tracker/features/history/history_page.dart';
 import 'package:mood_tracker/features/home/home_page.dart';
 import 'package:mood_tracker/features/trends/trends_page.dart';
+import 'package:mood_tracker/features/wearables/data/fitbit_callback_link_service.dart';
 
 class MoodTrackerApp extends StatelessWidget {
   const MoodTrackerApp({super.key});
@@ -37,6 +38,7 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   final _repository = LocalDailyLogRepository();
+  final _fitbitCallbackLinkService = FitbitCallbackLinkService();
   int _selectedIndex = 0;
   List<DailyLogEntry> _entries = const [];
   bool _isLoading = true;
@@ -64,6 +66,13 @@ class _AppShellState extends State<AppShell> {
   void initState() {
     super.initState();
     _loadData();
+    _fitbitCallbackLinkService.start();
+  }
+
+  @override
+  void dispose() {
+    _fitbitCallbackLinkService.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
