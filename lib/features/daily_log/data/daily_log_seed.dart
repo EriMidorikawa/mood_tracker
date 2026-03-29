@@ -27,7 +27,13 @@ const dailyLogQuestions = <DailyLogQuestion>[
   ),
   DailyLogQuestion(
     id: 'craving',
-    label: 'Craving',
+    label: 'General craving',
+    lowLabel: 'None',
+    highLabel: 'Very strong',
+  ),
+  DailyLogQuestion(
+    id: 'salty_craving',
+    label: 'Salty craving',
     lowLabel: 'None',
     highLabel: 'Very strong',
   ),

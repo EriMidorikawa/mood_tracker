@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:mood_tracker/features/daily_log/data/daily_log_seed.dart';
 import 'package:mood_tracker/features/daily_log/models/daily_log_entry.dart';
 
 class DashboardPage extends StatelessWidget {
@@ -20,11 +19,37 @@ class DashboardPage extends StatelessWidget {
       );
     }
 
-    final averageScore = latestEntry!.responses.values.fold<int>(
-          0,
-          (sum, value) => sum + value,
-        ) /
-        latestEntry!.responses.length;
+    final sections = <_DashboardSection>[
+      const _DashboardSection(
+        title: 'Mind & Energy',
+        items: [
+          _DashboardMetric('Mood', 'mood'),
+          _DashboardMetric('Motivation', 'motivation'),
+          _DashboardMetric('Fatigue', 'fatigue'),
+        ],
+      ),
+      const _DashboardSection(
+        title: 'Appetite & Cravings',
+        items: [
+          _DashboardMetric('Hunger', 'hunger'),
+          _DashboardMetric('General craving', 'craving'),
+          _DashboardMetric('Salty craving', 'salty_craving'),
+          _DashboardMetric('Sweet craving', 'sweet_craving'),
+        ],
+      ),
+      const _DashboardSection(
+        title: 'Eating Experience',
+        items: [
+          _DashboardMetric(
+            'Post-meal satisfaction',
+            'post_meal_satisfaction',
+          ),
+          _DashboardMetric('Overeating feeling', 'overeating_feeling'),
+        ],
+      ),
+    ];
+
+    final hasNote = latestEntry!.note.trim().isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Dashboard')),
@@ -44,48 +69,34 @@ class DashboardPage extends StatelessWidget {
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Wrap(
+                spacing: 12,
+                runSpacing: 12,
                 children: [
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: [
-                      _SummaryChip(
-                        label: 'Record date',
-                        value: _formatDate(latestEntry!.loggedAt),
-                        icon: Icons.event_outlined,
-                      ),
-                      _SummaryChip(
-                        label: 'Average',
-                        value: averageScore.toStringAsFixed(1),
-                        icon: Icons.auto_graph_rounded,
-                      ),
-                      _SummaryChip(
-                        label: 'Mood',
-                        value: '${latestEntry!.responses['mood'] ?? 0}/5',
-                        icon: Icons.mood_outlined,
-                      ),
-                    ],
+                  _SummaryChip(
+                    label: 'Record date',
+                    value: _formatDate(latestEntry!.loggedAt),
+                    icon: Icons.event_outlined,
                   ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'Scores',
-                    style: Theme.of(context).textTheme.titleMedium,
+                  _SummaryChip(
+                    label: 'Notes',
+                    value: hasNote ? 'Added' : 'None',
+                    icon: hasNote
+                        ? Icons.sticky_note_2_outlined
+                        : Icons.note_alt_outlined,
                   ),
-                  const SizedBox(height: 12),
-                  for (final question in dailyLogQuestions) ...[
-                    _ScoreRow(
-                      label: question.label,
-                      value: latestEntry!.responses[question.id] ?? 0,
-                    ),
-                    const SizedBox(height: 12),
-                  ],
                 ],
               ),
             ),
           ),
           const SizedBox(height: 16),
+          for (final section in sections) ...[
+            _SectionCard(
+              section: section,
+              responses: latestEntry!.responses,
+            ),
+            const SizedBox(height: 16),
+          ],
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -98,9 +109,7 @@ class DashboardPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    latestEntry!.note.isEmpty
-                        ? 'No notes added yet.'
-                        : latestEntry!.note,
+                    hasNote ? latestEntry!.note : 'No notes added yet.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 ],
@@ -108,6 +117,39 @@ class DashboardPage extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({
+    required this.section,
+    required this.responses,
+  });
+
+  final _DashboardSection section;
+  final Map<String, int> responses;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(section.title, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 12),
+            for (var index = 0; index < section.items.length; index++) ...[
+              _ScoreRow(
+                label: section.items[index].label,
+                value: responses[section.items[index].responseKey] ?? 0,
+              ),
+              if (index < section.items.length - 1) const SizedBox(height: 12),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -223,6 +265,23 @@ class PlaceholderPage extends StatelessWidget {
       ),
     );
   }
+}
+
+class _DashboardSection {
+  const _DashboardSection({
+    required this.title,
+    required this.items,
+  });
+
+  final String title;
+  final List<_DashboardMetric> items;
+}
+
+class _DashboardMetric {
+  const _DashboardMetric(this.label, this.responseKey);
+
+  final String label;
+  final String responseKey;
 }
 
 String _formatDate(DateTime dateTime) {
