@@ -18,21 +18,38 @@ class DailyLogPage extends StatefulWidget {
 }
 
 class _DailyLogPageState extends State<DailyLogPage> {
-  late final Map<String, int> _responses = {
-    for (final question in dailyLogQuestions)
-      question.id: widget.initialEntry?.responses[question.id] ?? 3,
-  };
-  late DateTime _selectedLogDate = _dateOnly(
-    widget.initialEntry?.loggedAt ?? DateTime.now(),
-  );
-  late final TextEditingController _memoController = TextEditingController(
-    text: widget.initialEntry?.note ?? '',
-  );
+  late Map<String, int> _responses;
+  late DateTime _selectedLogDate;
+  late final TextEditingController _memoController;
+
+  @override
+  void initState() {
+    super.initState();
+    _memoController = TextEditingController();
+    _applyEntry(widget.initialEntry);
+  }
+
+  @override
+  void didUpdateWidget(covariant DailyLogPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialEntry != widget.initialEntry) {
+      _applyEntry(widget.initialEntry);
+    }
+  }
 
   @override
   void dispose() {
     _memoController.dispose();
     super.dispose();
+  }
+
+  void _applyEntry(DailyLogEntry? entry) {
+    _responses = {
+      for (final question in dailyLogQuestions)
+        question.id: entry?.responses[question.id] ?? 3,
+    };
+    _selectedLogDate = _dateOnly(entry?.loggedAt ?? DateTime.now());
+    _memoController.text = entry?.note ?? '';
   }
 
   void _save() {

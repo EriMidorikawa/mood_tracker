@@ -38,6 +38,8 @@ class _AppShellState extends State<AppShell> {
   final _repository = LocalDailyLogRepository();
   int _selectedIndex = 0;
   DailyLogEntry? _latestEntry;
+  DailyLogEntry? _activeEntry;
+  List<DailyLogEntry> _entries = const [];
   bool _isLoading = true;
   final _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
@@ -67,29 +69,35 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
-    _loadLatestEntry();
+    _loadData();
   }
 
-  Future<void> _loadLatestEntry() async {
+  Future<void> _loadData() async {
     final latestEntry = await _repository.loadLatestEntry();
+    final entries = await _repository.loadEntriesSorted();
     if (!mounted) {
       return;
     }
 
     setState(() {
       _latestEntry = latestEntry;
+      _activeEntry = latestEntry;
+      _entries = entries;
       _isLoading = false;
     });
   }
 
   Future<void> _handleSave(DailyLogEntry entry) async {
     await _repository.saveEntry(entry);
+    final entries = await _repository.loadEntriesSorted();
     if (!mounted) {
       return;
     }
 
     setState(() {
       _latestEntry = entry;
+      _activeEntry = entry;
+      _entries = entries;
       _selectedIndex = 0;
     });
 
@@ -99,6 +107,18 @@ class _AppShellState extends State<AppShell> {
         ..showSnackBar(
           const SnackBar(content: Text('Daily log saved locally.')),
         );
+    });
+  }
+
+  Future<void> _openEntryForDate(DateTime logDate) async {
+    final entry = await _repository.loadEntryByDate(logDate);
+    if (!mounted || entry == null) {
+      return;
+    }
+
+    setState(() {
+      _activeEntry = entry;
+      _selectedIndex = 1;
     });
   }
 
@@ -113,10 +133,14 @@ class _AppShellState extends State<AppShell> {
     final pages = <Widget>[
       DashboardPage(latestEntry: _latestEntry),
       DailyLogPage(
-        initialEntry: _latestEntry,
+        key: ValueKey(_activeEntry?.loggedAt.toIso8601String() ?? 'new-entry'),
+        initialEntry: _activeEntry,
         onSave: _handleSave,
       ),
-      const TrendsPage(),
+      TrendsPage(
+        entries: _entries,
+        onOpenEntry: _openEntryForDate,
+      ),
       const SettingsPage(),
     ];
 

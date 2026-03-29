@@ -45,6 +45,13 @@ class LocalDailyLogRepository {
     };
   }
 
+  Future<List<DailyLogEntry>> loadEntriesSorted() async {
+    final entries = await loadEntries();
+    final sortedEntries = entries.values.toList()
+      ..sort((a, b) => b.loggedAt.compareTo(a.loggedAt));
+    return sortedEntries;
+  }
+
   Future<void> saveEntry(DailyLogEntry entry) async {
     final preferences = await SharedPreferences.getInstance();
     final entries = await loadEntries();
