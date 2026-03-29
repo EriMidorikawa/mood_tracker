@@ -10,9 +10,7 @@ class LocalDailyLogRepository {
   Future<DailyLogEntry?> loadLatestEntry() async {
     final entries = await loadEntries();
     if (entries.isNotEmpty) {
-      final sortedEntries = entries.values.toList()
-        ..sort((a, b) => b.loggedAt.compareTo(a.loggedAt));
-      return sortedEntries.first;
+      return _latestEntryFromEntries(entries);
     }
 
     final preferences = await SharedPreferences.getInstance();
@@ -21,9 +19,7 @@ class LocalDailyLogRepository {
       return null;
     }
 
-    final entry = DailyLogEntry.fromJsonString(rawEntry);
-    await saveEntry(entry);
-    return entry;
+    return DailyLogEntry.fromJsonString(rawEntry);
   }
 
   Future<DailyLogEntry?> loadEntryByDate(DateTime logDate) async {
@@ -64,7 +60,10 @@ class LocalDailyLogRepository {
     };
 
     await preferences.setString(_entriesByDateKey, jsonEncode(encodedEntries));
-    await preferences.setString(_latestEntryKey, entry.toJsonString());
+    final latestEntry = _latestEntryFromEntries(entries);
+    if (latestEntry != null) {
+      await preferences.setString(_latestEntryKey, latestEntry.toJsonString());
+    }
   }
 
   Future<void> clear() async {
@@ -72,6 +71,16 @@ class LocalDailyLogRepository {
     await preferences.remove(_latestEntryKey);
     await preferences.remove(_entriesByDateKey);
   }
+}
+
+DailyLogEntry? _latestEntryFromEntries(Map<String, DailyLogEntry> entries) {
+  if (entries.isEmpty) {
+    return null;
+  }
+
+  final sortedEntries = entries.values.toList()
+    ..sort((a, b) => b.loggedAt.compareTo(a.loggedAt));
+  return sortedEntries.first;
 }
 
 String _dateKey(DateTime dateTime) {
