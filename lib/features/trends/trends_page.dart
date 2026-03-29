@@ -16,10 +16,15 @@ class TrendsPage extends StatefulWidget {
 
 class _TrendsPageState extends State<TrendsPage> {
   int _selectedDays = 7;
+  _TrendMetric _selectedMetric = _trendMetrics.first;
 
   @override
   Widget build(BuildContext context) {
-    final points = _buildMoodPoints(widget.entries, _selectedDays);
+    final points = _buildMetricPoints(
+      entries: widget.entries,
+      days: _selectedDays,
+      metricKey: _selectedMetric.key,
+    );
     final loggedValues = points
         .where((point) => point.value != null)
         .map((point) => point.value!)
@@ -38,8 +43,25 @@ class _TrendsPageState extends State<TrendsPage> {
         padding: const EdgeInsets.all(16),
         children: [
           Text(
-            'Mood',
+            _selectedMetric.label,
             style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 8),
+          SegmentedButton<_TrendMetric>(
+            segments: _trendMetrics
+                .map(
+                  (metric) => ButtonSegment<_TrendMetric>(
+                    value: metric,
+                    label: Text(metric.label),
+                  ),
+                )
+                .toList(),
+            selected: {_selectedMetric},
+            onSelectionChanged: (selection) {
+              setState(() {
+                _selectedMetric = selection.first;
+              });
+            },
           ),
           const SizedBox(height: 8),
           SegmentedButton<int>(
@@ -63,7 +85,7 @@ class _TrendsPageState extends State<TrendsPage> {
                 children: [
                   SizedBox(
                     height: 240,
-                    child: _MoodChart(points: points),
+                    child: _MetricChart(points: points),
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -105,7 +127,7 @@ class _TrendsPageState extends State<TrendsPage> {
           if (loggedValues.isEmpty) ...[
             const SizedBox(height: 16),
             Text(
-              'No mood data was logged in this period yet.',
+              'No ${_selectedMetric.label.toLowerCase()} data was logged in this period yet.',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
           ],
@@ -115,12 +137,12 @@ class _TrendsPageState extends State<TrendsPage> {
   }
 }
 
-class _MoodChart extends StatelessWidget {
-  const _MoodChart({
+class _MetricChart extends StatelessWidget {
+  const _MetricChart({
     required this.points,
   });
 
-  final List<_MoodPoint> points;
+  final List<_MetricPoint> points;
 
   @override
   Widget build(BuildContext context) {
@@ -143,7 +165,7 @@ class _MoodChart extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: CustomPaint(
-            painter: _MoodChartPainter(
+            painter: _MetricChartPainter(
               points: points,
               colorScheme: Theme.of(context).colorScheme,
             ),
@@ -155,13 +177,13 @@ class _MoodChart extends StatelessWidget {
   }
 }
 
-class _MoodChartPainter extends CustomPainter {
-  const _MoodChartPainter({
+class _MetricChartPainter extends CustomPainter {
+  const _MetricChartPainter({
     required this.points,
     required this.colorScheme,
   });
 
-  final List<_MoodPoint> points;
+  final List<_MetricPoint> points;
   final ColorScheme colorScheme;
 
   @override
@@ -227,7 +249,7 @@ class _MoodChartPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _MoodChartPainter oldDelegate) {
+  bool shouldRepaint(covariant _MetricChartPainter oldDelegate) {
     return oldDelegate.points != points ||
         oldDelegate.colorScheme != colorScheme;
   }
@@ -255,8 +277,8 @@ class _SummaryPill extends StatelessWidget {
   }
 }
 
-class _MoodPoint {
-  const _MoodPoint({
+class _MetricPoint {
+  const _MetricPoint({
     required this.date,
     required this.value,
   });
@@ -265,10 +287,30 @@ class _MoodPoint {
   final int? value;
 }
 
-List<_MoodPoint> _buildMoodPoints(List<DailyLogEntry> entries, int days) {
+class _TrendMetric {
+  const _TrendMetric({
+    required this.key,
+    required this.label,
+  });
+
+  final String key;
+  final String label;
+}
+
+const _trendMetrics = <_TrendMetric>[
+  _TrendMetric(key: 'mood', label: 'Mood'),
+  _TrendMetric(key: 'motivation', label: 'Motivation'),
+  _TrendMetric(key: 'fatigue', label: 'Fatigue'),
+];
+
+List<_MetricPoint> _buildMetricPoints({
+  required List<DailyLogEntry> entries,
+  required int days,
+  required String metricKey,
+}) {
   final today = _dateOnly(DateTime.now());
   final start = today.subtract(Duration(days: days - 1));
-  final moodByDate = <String, int>{};
+  final valuesByDate = <String, int>{};
 
   for (final entry in entries) {
     final entryDate = _dateOnly(entry.loggedAt);
@@ -276,17 +318,17 @@ List<_MoodPoint> _buildMoodPoints(List<DailyLogEntry> entries, int days) {
       continue;
     }
 
-    final mood = entry.responses['mood'];
-    if (mood != null) {
-      moodByDate[_dateKey(entryDate)] = mood;
+    final value = entry.responses[metricKey];
+    if (value != null) {
+      valuesByDate[_dateKey(entryDate)] = value;
     }
   }
 
   return List.generate(days, (index) {
     final date = start.add(Duration(days: index));
-    return _MoodPoint(
+    return _MetricPoint(
       date: date,
-      value: moodByDate[_dateKey(date)],
+      value: valuesByDate[_dateKey(date)],
     );
   });
 }
