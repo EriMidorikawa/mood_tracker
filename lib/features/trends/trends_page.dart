@@ -34,14 +34,6 @@ class _TrendsPageState extends State<TrendsPage> {
       metricKey: _selectedMetric.key,
       selectedYear: selectedYear,
     );
-    final loggedValues = series.points
-        .where((point) => point.value != null)
-        .map((point) => point.value!)
-        .toList();
-    final latestValue = loggedValues.isEmpty ? null : loggedValues.last;
-    final averageValue = loggedValues.isEmpty
-        ? null
-        : loggedValues.reduce((sum, value) => sum + value) / loggedValues.length;
 
     return Scaffold(
       appBar: AppBar(
@@ -134,7 +126,7 @@ class _TrendsPageState extends State<TrendsPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   SizedBox(
-                    height: 240,
+                    height: 300,
                     child: _MetricChart(
                       points: series.points,
                       accentColor: metricColor,
@@ -155,43 +147,7 @@ class _TrendsPageState extends State<TrendsPage> {
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  _SummaryPill(
-                    accentColor: metricColor,
-                    label: 'Latest',
-                    value: latestValue == null
-                        ? '--'
-                        : latestValue.toStringAsFixed(
-                            _selectedRange == _TrendRange.sevenDays ||
-                                    _selectedRange == _TrendRange.thirtyDays
-                                ? 0
-                                : 1,
-                          ),
-                  ),
-                  _SummaryPill(
-                    accentColor: metricColor,
-                    label: 'Avg',
-                    value: averageValue == null
-                        ? '--'
-                        : averageValue.toStringAsFixed(1),
-                  ),
-                  _SummaryPill(
-                    accentColor: metricColor,
-                    label: series.summaryLabel,
-                    value: '${series.loggedCount}',
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (loggedValues.isEmpty) ...[
+          if (series.loggedCount == 0) ...[
             const SizedBox(height: 16),
             Text(
               'No ${_selectedMetric.label.toLowerCase()} data was logged in this period yet.',
@@ -449,34 +405,6 @@ class _MonthAxisLabels extends StatelessWidget {
   }
 }
 
-class _SummaryPill extends StatelessWidget {
-  const _SummaryPill({
-    required this.accentColor,
-    required this.label,
-    required this.value,
-  });
-
-  final Color accentColor;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: accentColor.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: accentColor.withValues(alpha: 0.35)),
-      ),
-      child: Text(
-        '$label: $value',
-        style: TextStyle(color: accentColor),
-      ),
-    );
-  }
-}
-
 class _MetricPoint {
   const _MetricPoint({
     required this.date,
@@ -504,7 +432,6 @@ class _TrendSeries {
     required this.points,
     required this.startLabel,
     required this.endLabel,
-    required this.summaryLabel,
     required this.loggedCount,
     required this.showRangeLabels,
     required this.monthMarkers,
@@ -513,7 +440,6 @@ class _TrendSeries {
   final List<_MetricPoint> points;
   final String startLabel;
   final String endLabel;
-  final String summaryLabel;
   final int loggedCount;
   final bool showRangeLabels;
   final List<_MonthMarker> monthMarkers;
@@ -644,7 +570,6 @@ _TrendSeries _buildDailySeries({
     points: points,
     startLabel: _formatShortDate(points.first.date),
     endLabel: _formatShortDate(points.last.date),
-    summaryLabel: 'Logged days',
     loggedCount: valuesByDate.length,
     showRangeLabels: true,
     monthMarkers: const [],
@@ -696,7 +621,6 @@ _TrendSeries _buildWeeklySeries({
     points: points,
     startLabel: _formatShortDate(points.first.date),
     endLabel: _formatShortDate(points.last.date),
-    summaryLabel: 'Logged weeks',
     loggedCount: points.where((point) => point.value != null).length,
     showRangeLabels: false,
     monthMarkers: monthMarkers,
@@ -748,7 +672,6 @@ _TrendSeries _buildThisYearSeries({
     points: points,
     startLabel: _formatShortDate(points.first.date),
     endLabel: _formatShortDate(points.last.date),
-    summaryLabel: 'Logged periods',
     loggedCount: points.where((point) => point.value != null).length,
     showRangeLabels: false,
     monthMarkers: monthMarkers,
