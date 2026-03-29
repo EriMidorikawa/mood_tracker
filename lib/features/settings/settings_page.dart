@@ -207,13 +207,13 @@ class _SettingsPageState extends State<SettingsPage> {
                     'Status: ${_fitbitConnection?.isConnected == true ? 'Connected' : 'Not connected'}',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
-                  if (_fitbitConnection?.lastSyncedAt case final lastSyncedAt?) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      'Last synced: ${_formatDateTime(lastSyncedAt)}',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ],
+                  const SizedBox(height: 4),
+                  Text(
+                    _fitbitConnection?.lastSyncedAt != null
+                        ? 'Last synced: ${_formatDateTime(_fitbitConnection!.lastSyncedAt!)}'
+                        : 'Last synced: Never',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
                   const SizedBox(height: 16),
                   FilledButton(
                     onPressed: _isSyncingFitbit ? null : _syncFitbitData,
@@ -323,7 +323,7 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(() {
         _fitbitConnection = updatedConnection;
         _isSyncingFitbit = false;
-        _fitbitSyncResult = 'Fitbit data synced';
+        _fitbitSyncResult = 'Synced Fitbit data for ${_formatDate(today)}';
       });
     } on FitbitApiException catch (error) {
       if (!mounted) {
@@ -512,4 +512,24 @@ String _formatDateTime(DateTime dateTime) {
           : hour24;
 
   return '$month $day, $year $hour12:$minute $period';
+}
+
+String _formatDate(DateTime dateTime) {
+  const months = <String>[
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  final month = months[dateTime.month - 1];
+  return '$month ${dateTime.day}, ${dateTime.year}';
 }
