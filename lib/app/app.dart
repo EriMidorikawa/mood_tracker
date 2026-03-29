@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:mood_tracker/features/dashboard/dashboard_page.dart';
+import 'package:mood_tracker/app/settings_menu_button.dart';
 import 'package:mood_tracker/features/daily_log/data/local_daily_log_repository.dart';
 import 'package:mood_tracker/features/daily_log/models/daily_log_entry.dart';
 import 'package:mood_tracker/features/daily_log/daily_log_page.dart';
 import 'package:mood_tracker/features/history/history_page.dart';
+import 'package:mood_tracker/features/home/home_page.dart';
 import 'package:mood_tracker/features/trends/trends_page.dart';
 
 class MoodTrackerApp extends StatelessWidget {
@@ -37,22 +38,15 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   final _repository = LocalDailyLogRepository();
   int _selectedIndex = 0;
-  DailyLogEntry? _latestEntry;
-  DailyLogEntry? _activeEntry;
   List<DailyLogEntry> _entries = const [];
   bool _isLoading = true;
   final _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
   static const _destinations = <NavigationDestination>[
     NavigationDestination(
-      icon: Icon(Icons.dashboard_outlined),
-      selectedIcon: Icon(Icons.dashboard),
-      label: 'Dashboard',
-    ),
-    NavigationDestination(
-      icon: Icon(Icons.edit_note_outlined),
-      selectedIcon: Icon(Icons.edit_note),
-      label: 'Daily Log',
+      icon: Icon(Icons.home_outlined),
+      selectedIcon: Icon(Icons.home),
+      label: 'Home',
     ),
     NavigationDestination(
       icon: Icon(Icons.show_chart_outlined),
@@ -73,15 +67,12 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _loadData() async {
-    final latestEntry = await _repository.loadLatestEntry();
     final entries = await _repository.loadEntriesSorted();
     if (!mounted) {
       return;
     }
 
     setState(() {
-      _latestEntry = latestEntry;
-      _activeEntry = latestEntry;
       _entries = entries;
       _isLoading = false;
     });
@@ -95,8 +86,6 @@ class _AppShellState extends State<AppShell> {
     }
 
     setState(() {
-      _latestEntry = entry;
-      _activeEntry = entry;
       _entries = entries;
       _selectedIndex = 0;
     });
@@ -112,17 +101,14 @@ class _AppShellState extends State<AppShell> {
 
   Future<void> _saveEntryFromHistory(DailyLogEntry entry) async {
     await _repository.saveEntry(entry);
-    final latestEntry = await _repository.loadLatestEntry();
     final entries = await _repository.loadEntriesSorted();
     if (!mounted) {
       return;
     }
 
     setState(() {
-      _latestEntry = latestEntry;
-      _activeEntry = latestEntry;
       _entries = entries;
-      _selectedIndex = 3;
+      _selectedIndex = 2;
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -134,6 +120,27 @@ class _AppShellState extends State<AppShell> {
     });
   }
 
+  Future<void> _openTodayLog(BuildContext context) async {
+    final today = DateTime.now();
+    final todayEntry = await _repository.loadEntryByDate(today);
+    if (!context.mounted) {
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => DailyLogPage(
+          initialEntry: todayEntry,
+          initialDate: todayEntry == null ? today : null,
+          onSave: _handleSave,
+          popOnSave: true,
+          showSettingsMenu: false,
+          title: todayEntry == null ? 'Log today' : 'Edit today\'s log',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -142,14 +149,22 @@ class _AppShellState extends State<AppShell> {
       );
     }
 
+    final today = DateTime.now();
+    DailyLogEntry? todayEntry;
+    for (final entry in _entries) {
+      if (entry.loggedAt.year == today.year &&
+          entry.loggedAt.month == today.month &&
+          entry.loggedAt.day == today.day) {
+        todayEntry = entry;
+        break;
+      }
+    }
+
     final pages = <Widget>[
-      DashboardPage(
-        latestEntry: _latestEntry,
-      ),
-      DailyLogPage(
-        key: ValueKey(_activeEntry?.loggedAt.toIso8601String() ?? 'new-entry'),
-        initialEntry: _activeEntry,
-        onSave: _handleSave,
+      HomePage(
+        todayEntry: todayEntry,
+        onOpenTodayLog: () => _openTodayLog(context),
+        onOpenSettings: () => openSettingsPage(context),
       ),
       TrendsPage(entries: _entries),
       HistoryPage(

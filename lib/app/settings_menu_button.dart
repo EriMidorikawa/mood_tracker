@@ -1,6 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:mood_tracker/features/settings/settings_page.dart';
 
+void openSettingsPage(BuildContext context) {
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => const SettingsPage(),
+    ),
+  );
+}
+
 class SettingsMenuButton extends StatelessWidget {
   const SettingsMenuButton({super.key});
 
@@ -11,11 +19,7 @@ class SettingsMenuButton extends StatelessWidget {
       onSelected: (value) {
         switch (value) {
           case _AppMenuAction.settings:
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const SettingsPage(),
-              ),
-            );
+            openSettingsPage(context);
         }
       },
       itemBuilder: (context) => const [
