@@ -20,6 +20,7 @@ class _TrendsPageState extends State<TrendsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final metricColor = _selectedMetric.color;
     final points = _buildMetricPoints(
       entries: widget.entries,
       days: _selectedDays,
@@ -44,10 +45,31 @@ class _TrendsPageState extends State<TrendsPage> {
         children: [
           Text(
             _selectedMetric.label,
-            style: Theme.of(context).textTheme.headlineSmall,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: metricColor,
+                ),
           ),
           const SizedBox(height: 8),
           SegmentedButton<_TrendMetric>(
+            style: ButtonStyle(
+              foregroundColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return Colors.white;
+                }
+
+                return metricColor;
+              }),
+              backgroundColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return metricColor;
+                }
+
+                return null;
+              }),
+              side: WidgetStatePropertyAll(
+                BorderSide(color: metricColor),
+              ),
+            ),
             segments: _trendMetrics
                 .map(
                   (metric) => ButtonSegment<_TrendMetric>(
@@ -85,7 +107,10 @@ class _TrendsPageState extends State<TrendsPage> {
                 children: [
                   SizedBox(
                     height: 240,
-                    child: _MetricChart(points: points),
+                    child: _MetricChart(
+                      points: points,
+                      accentColor: metricColor,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -107,16 +132,19 @@ class _TrendsPageState extends State<TrendsPage> {
                 runSpacing: 12,
                 children: [
                   _SummaryPill(
+                    accentColor: metricColor,
                     label: 'Latest',
                     value: latestValue == null ? '--' : '$latestValue',
                   ),
                   _SummaryPill(
+                    accentColor: metricColor,
                     label: 'Avg',
                     value: averageValue == null
                         ? '--'
                         : averageValue.toStringAsFixed(1),
                   ),
                   _SummaryPill(
+                    accentColor: metricColor,
                     label: 'Logged days',
                     value: '${loggedValues.length}',
                   ),
@@ -140,9 +168,11 @@ class _TrendsPageState extends State<TrendsPage> {
 class _MetricChart extends StatelessWidget {
   const _MetricChart({
     required this.points,
+    required this.accentColor,
   });
 
   final List<_MetricPoint> points;
+  final Color accentColor;
 
   @override
   Widget build(BuildContext context) {
@@ -168,6 +198,7 @@ class _MetricChart extends StatelessWidget {
             painter: _MetricChartPainter(
               points: points,
               colorScheme: Theme.of(context).colorScheme,
+              accentColor: accentColor,
             ),
             child: const SizedBox.expand(),
           ),
@@ -181,10 +212,12 @@ class _MetricChartPainter extends CustomPainter {
   const _MetricChartPainter({
     required this.points,
     required this.colorScheme,
+    required this.accentColor,
   });
 
   final List<_MetricPoint> points;
   final ColorScheme colorScheme;
+  final Color accentColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -192,12 +225,12 @@ class _MetricChartPainter extends CustomPainter {
       ..color = colorScheme.outlineVariant
       ..strokeWidth = 1;
     final linePaint = Paint()
-      ..color = colorScheme.primary
+      ..color = accentColor
       ..strokeWidth = 3
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
     final pointPaint = Paint()
-      ..color = colorScheme.primary
+      ..color = accentColor
       ..style = PaintingStyle.fill;
     final missingPaint = Paint()
       ..color = colorScheme.outline
@@ -251,16 +284,19 @@ class _MetricChartPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _MetricChartPainter oldDelegate) {
     return oldDelegate.points != points ||
-        oldDelegate.colorScheme != colorScheme;
+        oldDelegate.colorScheme != colorScheme ||
+        oldDelegate.accentColor != accentColor;
   }
 }
 
 class _SummaryPill extends StatelessWidget {
   const _SummaryPill({
+    required this.accentColor,
     required this.label,
     required this.value,
   });
 
+  final Color accentColor;
   final String label;
   final String value;
 
@@ -269,10 +305,14 @@ class _SummaryPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        color: accentColor.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: accentColor.withValues(alpha: 0.35)),
       ),
-      child: Text('$label: $value'),
+      child: Text(
+        '$label: $value',
+        style: TextStyle(color: accentColor),
+      ),
     );
   }
 }
@@ -291,16 +331,30 @@ class _TrendMetric {
   const _TrendMetric({
     required this.key,
     required this.label,
+    required this.color,
   });
 
   final String key;
   final String label;
+  final Color color;
 }
 
 const _trendMetrics = <_TrendMetric>[
-  _TrendMetric(key: 'mood', label: 'Mood'),
-  _TrendMetric(key: 'motivation', label: 'Motivation'),
-  _TrendMetric(key: 'fatigue', label: 'Fatigue'),
+  _TrendMetric(
+    key: 'mood',
+    label: 'Mood',
+    color: Color(0xFF2E7D5B),
+  ),
+  _TrendMetric(
+    key: 'motivation',
+    label: 'Motivation',
+    color: Color(0xFF2F6FDB),
+  ),
+  _TrendMetric(
+    key: 'fatigue',
+    label: 'Fatigue',
+    color: Color(0xFFC56A1A),
+  ),
 ];
 
 List<_MetricPoint> _buildMetricPoints({
