@@ -86,41 +86,43 @@ class _AppShellState extends State<AppShell> {
     super.dispose();
   }
 
-  Future<void> _loadData() async {
+  Future<_AppShellData> _loadAppData() async {
     final entries = await _repository.loadEntriesSorted();
     final wearableMetrics = await _wearableRepository.loadDailyMetrics();
     final fitbitConnection = await _wearableRepository.loadConnection(
       WearableProvider.fitbit,
     );
+
+    return _AppShellData(
+      entries: entries,
+      wearableMetrics: wearableMetrics,
+      fitbitConnection: fitbitConnection,
+    );
+  }
+
+  WearableConnection? _applyAppData(_AppShellData data) {
     if (!mounted) {
-      return;
+      return null;
     }
 
     setState(() {
-      _entries = entries;
-      _wearableMetrics = wearableMetrics;
-      _fitbitConnection = fitbitConnection;
+      _entries = data.entries;
+      _wearableMetrics = data.wearableMetrics;
+      _fitbitConnection = data.fitbitConnection;
       _isLoading = false;
     });
+
+    return data.fitbitConnection;
+  }
+
+  Future<void> _loadData() async {
+    final data = await _loadAppData();
+    _applyAppData(data);
   }
 
   Future<void> _loadDataAndMaybeAutoSync() async {
-    final entries = await _repository.loadEntriesSorted();
-    final wearableMetrics = await _wearableRepository.loadDailyMetrics();
-    final fitbitConnection = await _wearableRepository.loadConnection(
-      WearableProvider.fitbit,
-    );
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _entries = entries;
-      _wearableMetrics = wearableMetrics;
-      _fitbitConnection = fitbitConnection;
-      _isLoading = false;
-    });
-
+    final data = await _loadAppData();
+    final fitbitConnection = _applyAppData(data);
     await _maybeAutoSyncFitbit(fitbitConnection);
   }
 
@@ -290,4 +292,16 @@ class _AppShellState extends State<AppShell> {
 
 DateTime _dateOnly(DateTime dateTime) {
   return DateTime(dateTime.year, dateTime.month, dateTime.day);
+}
+
+class _AppShellData {
+  const _AppShellData({
+    required this.entries,
+    required this.wearableMetrics,
+    required this.fitbitConnection,
+  });
+
+  final List<DailyLogEntry> entries;
+  final List<DailyWearableMetric> wearableMetrics;
+  final WearableConnection? fitbitConnection;
 }
