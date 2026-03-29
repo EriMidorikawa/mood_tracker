@@ -9,6 +9,8 @@ import 'package:mood_tracker/features/trends/trends_page.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_callback_link_service.dart';
 import 'package:mood_tracker/features/wearables/data/local_wearable_repository.dart';
 import 'package:mood_tracker/features/wearables/models/daily_wearable_metric.dart';
+import 'package:mood_tracker/features/wearables/models/wearable_connection.dart';
+import 'package:mood_tracker/features/wearables/models/wearable_provider.dart';
 
 class MoodTrackerApp extends StatelessWidget {
   const MoodTrackerApp({super.key});
@@ -45,6 +47,7 @@ class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
   List<DailyLogEntry> _entries = const [];
   List<DailyWearableMetric> _wearableMetrics = const [];
+  WearableConnection? _fitbitConnection;
   bool _isLoading = true;
   final _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
@@ -82,6 +85,9 @@ class _AppShellState extends State<AppShell> {
   Future<void> _loadData() async {
     final entries = await _repository.loadEntriesSorted();
     final wearableMetrics = await _wearableRepository.loadDailyMetrics();
+    final fitbitConnection = await _wearableRepository.loadConnection(
+      WearableProvider.fitbit,
+    );
     if (!mounted) {
       return;
     }
@@ -89,6 +95,7 @@ class _AppShellState extends State<AppShell> {
     setState(() {
       _entries = entries;
       _wearableMetrics = wearableMetrics;
+      _fitbitConnection = fitbitConnection;
       _isLoading = false;
     });
   }
@@ -183,6 +190,7 @@ class _AppShellState extends State<AppShell> {
     final pages = <Widget>[
       HomePage(
         todayEntry: todayEntry,
+        fitbitConnection: _fitbitConnection,
         onOpenTodayLog: () => _openTodayLog(context),
         onOpenSettings: () => _openSettingsAndRefresh(context),
         onSettingsClosed: () => _loadData(),

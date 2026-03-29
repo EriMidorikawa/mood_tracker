@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mood_tracker/app/settings_menu_button.dart';
 import 'package:mood_tracker/features/daily_log/models/daily_log_entry.dart';
+import 'package:mood_tracker/features/wearables/models/wearable_connection.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({
@@ -8,17 +9,20 @@ class HomePage extends StatelessWidget {
     required this.onOpenTodayLog,
     required this.onOpenSettings,
     required this.onSettingsClosed,
+    this.fitbitConnection,
     this.todayEntry,
   });
 
   final VoidCallback onOpenTodayLog;
   final Future<void> Function() onOpenSettings;
   final Future<void> Function() onSettingsClosed;
+  final WearableConnection? fitbitConnection;
   final DailyLogEntry? todayEntry;
 
   @override
   Widget build(BuildContext context) {
     final hasTodayLog = todayEntry != null;
+    final isFitbitConnected = fitbitConnection?.isConnected == true;
 
     return Scaffold(
       appBar: AppBar(
@@ -78,15 +82,24 @@ class HomePage extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Not connected yet.',
+                    isFitbitConnected ? 'Connected' : 'Not connected yet.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
+                  if (fitbitConnection?.lastSyncedAt != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Last synced: ${_formatDateTime(fitbitConnection!.lastSyncedAt!)}',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   OutlinedButton(
                     onPressed: () {
                       onOpenSettings();
                     },
-                    child: const Text('Open Settings'),
+                    child: Text(
+                      isFitbitConnected ? 'Manage Fitbit' : 'Open Settings',
+                    ),
                   ),
                 ],
               ),
@@ -115,4 +128,35 @@ String _formatDate(DateTime dateTime) {
   ];
 
   return '${months[dateTime.month - 1]} ${dateTime.day}, ${dateTime.year}';
+}
+
+String _formatDateTime(DateTime dateTime) {
+  const months = <String>[
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  final month = months[dateTime.month - 1];
+  final day = dateTime.day;
+  final year = dateTime.year;
+  final hour24 = dateTime.hour;
+  final minute = dateTime.minute.toString().padLeft(2, '0');
+  final period = hour24 >= 12 ? 'PM' : 'AM';
+  final hour12 = hour24 == 0
+      ? 12
+      : hour24 > 12
+          ? hour24 - 12
+          : hour24;
+
+  return '$month $day, $year $hour12:$minute $period';
 }
