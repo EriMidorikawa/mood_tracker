@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mood_tracker/features/daily_log/data/daily_log_seed.dart';
 import 'package:mood_tracker/app/settings_menu_button.dart';
 import 'package:mood_tracker/features/daily_log/daily_log_page.dart';
 import 'package:mood_tracker/features/daily_log/models/daily_log_entry.dart';
@@ -589,20 +590,11 @@ class _ManualSummary {
 
 List<_ManualSummary> _manualSummaries(DailyLogEntry entry) {
   return [
-    _ManualSummary(label: 'Mood', value: '${entry.responses['mood'] ?? '-'}'),
-    _ManualSummary(
-      label: 'Motivation',
-      value: '${entry.responses['motivation'] ?? '-'}',
-    ),
-    _ManualSummary(
-      label: 'Fatigue',
-      value: '${entry.responses['fatigue'] ?? '-'}',
-    ),
-    _ManualSummary(label: 'Hunger', value: '${entry.responses['hunger'] ?? '-'}'),
-    _ManualSummary(
-      label: 'Sweet Craving',
-      value: '${entry.responses['sweet_craving'] ?? '-'}',
-    ),
+    for (final question in dailyLogQuestions)
+      _ManualSummary(
+        label: question.label,
+        value: '${entry.responses[question.id] ?? '-'}',
+      ),
   ];
 }
 
