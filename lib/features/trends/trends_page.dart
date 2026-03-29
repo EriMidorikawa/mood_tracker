@@ -17,14 +17,22 @@ class TrendsPage extends StatefulWidget {
 class _TrendsPageState extends State<TrendsPage> {
   _TrendRange _selectedRange = _TrendRange.sevenDays;
   _TrendMetric _selectedMetric = _trendMetrics.first;
+  int? _selectedYear;
 
   @override
   Widget build(BuildContext context) {
     final metricColor = _selectedMetric.color;
+    final availableYears = _availableYears(widget.entries);
+    final selectedYear = availableYears.contains(_selectedYear)
+        ? _selectedYear!
+        : (availableYears.isNotEmpty
+            ? availableYears.first
+            : DateTime.now().year);
     final series = _buildTrendSeries(
       entries: widget.entries,
       range: _selectedRange,
       metricKey: _selectedMetric.key,
+      selectedYear: selectedYear,
     );
     final loggedValues = series.points
         .where((point) => point.value != null)
@@ -80,7 +88,7 @@ class _TrendsPageState extends State<TrendsPage> {
               ),
               ButtonSegment<_TrendRange>(
                 value: _TrendRange.thisYear,
-                label: Text('This Year'),
+                label: Text('1Y'),
               ),
             ],
             selected: {_selectedRange},
@@ -90,6 +98,34 @@ class _TrendsPageState extends State<TrendsPage> {
               });
             },
           ),
+          if (_selectedRange == _TrendRange.thisYear &&
+              availableYears.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: DropdownMenu<int>(
+                initialSelection: selectedYear,
+                label: const Text('Year'),
+                dropdownMenuEntries: availableYears
+                    .map(
+                      (year) => DropdownMenuEntry<int>(
+                        value: year,
+                        label: '$year',
+                      ),
+                    )
+                    .toList(),
+                onSelected: (year) {
+                  if (year == null) {
+                    return;
+                  }
+
+                  setState(() {
+                    _selectedYear = year;
+                  });
+                },
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           Card(
             child: Padding(
@@ -539,6 +575,7 @@ _TrendSeries _buildTrendSeries({
   required List<DailyLogEntry> entries,
   required _TrendRange range,
   required String metricKey,
+  required int selectedYear,
 }) {
   switch (range) {
     case _TrendRange.sevenDays:
@@ -563,6 +600,7 @@ _TrendSeries _buildTrendSeries({
       return _buildThisYearSeries(
         entries: entries,
         metricKey: metricKey,
+        selectedYear: selectedYear,
       );
   }
 }
@@ -662,14 +700,17 @@ _TrendSeries _buildWeeklySeries({
 _TrendSeries _buildThisYearSeries({
   required List<DailyLogEntry> entries,
   required String metricKey,
+  required int selectedYear,
 }) {
   final today = _dateOnly(DateTime.now());
-  final yearStart = DateTime(today.year, 1, 1);
+  final isCurrentYear = selectedYear == today.year;
+  final periodEnd = isCurrentYear ? today : DateTime(selectedYear, 12, 31);
+  final yearStart = DateTime(selectedYear, 1, 1);
   final bucketValues = <String, List<int>>{};
 
   for (final entry in entries) {
     final entryDate = _dateOnly(entry.loggedAt);
-    if (entryDate.isBefore(yearStart) || entryDate.isAfter(today)) {
+    if (entryDate.isBefore(yearStart) || entryDate.isAfter(periodEnd)) {
       continue;
     }
 
@@ -682,7 +723,7 @@ _TrendSeries _buildThisYearSeries({
 
   final points = <_MetricPoint>[];
   var cursor = yearStart;
-  while (!cursor.isAfter(today)) {
+  while (!cursor.isAfter(periodEnd)) {
     final values = bucketValues[_dateKey(cursor)];
     final average = values == null || values.isEmpty
         ? null
@@ -706,6 +747,12 @@ _TrendSeries _buildThisYearSeries({
     showRangeLabels: false,
     monthMarkers: monthMarkers,
   );
+}
+
+List<int> _availableYears(List<DailyLogEntry> entries) {
+  final years = entries.map((entry) => entry.loggedAt.year).toSet().toList()
+    ..sort((a, b) => b.compareTo(a));
+  return years;
 }
 
 DateTime _dateOnly(DateTime dateTime) {
