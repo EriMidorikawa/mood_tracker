@@ -22,6 +22,8 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
+  static const _fitbitBackfillDays = 30;
+
   final _wearableRepository = LocalWearableRepository();
   final _fitbitOAuthClient = FitbitOAuthClient();
   final _fitbitTokenStore = FitbitOAuthTokenStore();
@@ -30,6 +32,7 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _sampleSaveResult;
   bool _isSyncingFitbit = false;
   bool _isBackfillingFitbit = false;
+  int _fitbitBackfillProgress = 0;
   bool _isHandlingFitbitCallback = false;
   String? _fitbitSyncResult;
   String? _lastHandledCallbackUri;
@@ -230,9 +233,16 @@ class _SettingsPageState extends State<SettingsPage> {
                     child: Text(
                       _isBackfillingFitbit
                           ? 'Backfilling Fitbit data...'
-                          : 'Backfill Fitbit data',
+                          : 'Backfill Fitbit data (Last 30 days)',
                     ),
                   ),
+                  if (_isBackfillingFitbit) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      '$_fitbitBackfillProgress / $_fitbitBackfillDays',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   OutlinedButton(
                     onPressed: _fitbitConnection == null
@@ -359,6 +369,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _backfillFitbitData() async {
     setState(() {
       _isBackfillingFitbit = true;
+      _fitbitBackfillProgress = 0;
       _fitbitSyncResult = 'Backfilling Fitbit data...';
     });
 
@@ -375,12 +386,17 @@ class _SettingsPageState extends State<SettingsPage> {
             FitbitApiClient(accessToken: token.accessToken).fetchDailySnapshot,
       );
 
-      for (var offset = 89; offset >= 0; offset--) {
+      for (var offset = _fitbitBackfillDays - 1; offset >= 0; offset--) {
         final date = today.subtract(Duration(days: offset));
         try {
           final metrics = await fitbitAdapter.fetchDailyMetrics(date);
           await _wearableRepository.upsertDailyMetrics(metrics);
           importedDays += 1;
+          if (mounted) {
+            setState(() {
+              _fitbitBackfillProgress = importedDays;
+            });
+          }
         } catch (_) {
           if (!mounted) {
             return;
@@ -388,8 +404,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
           setState(() {
             _isBackfillingFitbit = false;
+            _fitbitBackfillProgress = importedDays;
             _fitbitSyncResult =
-                'Imported $importedDays / 90 days before sync failed';
+                'Imported $importedDays / $_fitbitBackfillDays days before sync failed';
           });
           return;
         }
@@ -418,7 +435,8 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(() {
         _fitbitConnection = updatedConnection;
         _isBackfillingFitbit = false;
-        _fitbitSyncResult = 'Imported 90 days of Fitbit data';
+        _fitbitBackfillProgress = _fitbitBackfillDays;
+        _fitbitSyncResult = 'Imported $_fitbitBackfillDays days of Fitbit data';
       });
     } on FitbitApiException catch (error) {
       if (!mounted) {
@@ -427,9 +445,10 @@ class _SettingsPageState extends State<SettingsPage> {
 
       setState(() {
         _isBackfillingFitbit = false;
+        _fitbitBackfillProgress = importedDays;
         _fitbitSyncResult = importedDays == 0
             ? error.message
-            : 'Imported $importedDays / 90 days before sync failed';
+            : 'Imported $importedDays / $_fitbitBackfillDays days before sync failed';
       });
     } catch (_) {
       if (!mounted) {
@@ -438,7 +457,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
       setState(() {
         _isBackfillingFitbit = false;
-        _fitbitSyncResult = 'Imported 0 / 90 days before sync failed';
+        _fitbitBackfillProgress = importedDays;
+        _fitbitSyncResult =
+            'Imported 0 / $_fitbitBackfillDays days before sync failed';
       });
     }
   }
