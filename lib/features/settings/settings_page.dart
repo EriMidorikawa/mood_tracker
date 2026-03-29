@@ -33,6 +33,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _isSyncingFitbit = false;
   bool _isBackfillingFitbit = false;
   int _fitbitBackfillProgress = 0;
+  int _fitbitBackfillTarget = _fitbitBackfillDays;
   bool _isHandlingFitbitCallback = false;
   String? _fitbitSyncResult;
   String? _lastHandledCallbackUri;
@@ -239,7 +240,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   if (_isBackfillingFitbit) ...[
                     const SizedBox(height: 8),
                     Text(
-                      '$_fitbitBackfillProgress / $_fitbitBackfillDays',
+                      '$_fitbitBackfillProgress / $_fitbitBackfillTarget',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
@@ -370,10 +371,12 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() {
       _isBackfillingFitbit = true;
       _fitbitBackfillProgress = 0;
+      _fitbitBackfillTarget = _fitbitBackfillDays;
       _fitbitSyncResult = 'Backfilling Fitbit data...';
     });
 
     var importedDays = 0;
+    var failedDays = 0;
     try {
       final token = await _fitbitTokenStore.loadToken();
       if (token == null || token.isExpired) {
@@ -381,34 +384,52 @@ class _SettingsPageState extends State<SettingsPage> {
       }
 
       final today = _dateOnly(DateTime.now());
+      final startDate = today.subtract(
+        const Duration(days: _fitbitBackfillDays - 1),
+      );
+      final existingMetrics = await _wearableRepository.loadDailyMetricsInRange(
+        startDate: startDate,
+        endDate: today,
+        provider: WearableProvider.fitbit,
+      );
+      final missingDates = _buildMissingFitbitBackfillDates(
+        existingMetrics: existingMetrics,
+        startDate: startDate,
+        endDate: today,
+      );
+
+      if (missingDates.isEmpty) {
+        setState(() {
+          _isBackfillingFitbit = false;
+          _fitbitBackfillProgress = 0;
+          _fitbitBackfillTarget = 0;
+          _fitbitSyncResult = 'Last $_fitbitBackfillDays days already imported';
+        });
+        return;
+      }
+
+      setState(() {
+        _fitbitBackfillTarget = missingDates.length;
+      });
+
       final fitbitAdapter = FitbitSourceAdapter(
         fetchSnapshot:
             FitbitApiClient(accessToken: token.accessToken).fetchDailySnapshot,
       );
 
-      for (var offset = _fitbitBackfillDays - 1; offset >= 0; offset--) {
-        final date = today.subtract(Duration(days: offset));
+      for (final date in missingDates) {
         try {
           final metrics = await fitbitAdapter.fetchDailyMetrics(date);
           await _wearableRepository.upsertDailyMetrics(metrics);
           importedDays += 1;
-          if (mounted) {
-            setState(() {
-              _fitbitBackfillProgress = importedDays;
-            });
-          }
         } catch (_) {
-          if (!mounted) {
-            return;
-          }
+          failedDays += 1;
+        }
 
+        if (mounted) {
           setState(() {
-            _isBackfillingFitbit = false;
-            _fitbitBackfillProgress = importedDays;
-            _fitbitSyncResult =
-                'Imported $importedDays / $_fitbitBackfillDays days before sync failed';
+            _fitbitBackfillProgress = importedDays + failedDays;
           });
-          return;
         }
       }
 
@@ -435,8 +456,11 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(() {
         _fitbitConnection = updatedConnection;
         _isBackfillingFitbit = false;
-        _fitbitBackfillProgress = _fitbitBackfillDays;
-        _fitbitSyncResult = 'Imported $_fitbitBackfillDays days of Fitbit data';
+        _fitbitBackfillProgress = importedDays + failedDays;
+        _fitbitBackfillTarget = missingDates.length;
+        _fitbitSyncResult = failedDays == 0
+            ? 'Imported ${missingDates.length} days of Fitbit data'
+            : 'Imported $importedDays of ${missingDates.length} days. Some days could not be synced.';
       });
     } on FitbitApiException catch (error) {
       if (!mounted) {
@@ -446,9 +470,12 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(() {
         _isBackfillingFitbit = false;
         _fitbitBackfillProgress = importedDays;
+        _fitbitBackfillTarget = _fitbitBackfillTarget == 0
+            ? _fitbitBackfillDays
+            : _fitbitBackfillTarget;
         _fitbitSyncResult = importedDays == 0
             ? error.message
-            : 'Imported $importedDays / $_fitbitBackfillDays days before sync failed';
+            : 'Imported $importedDays of $_fitbitBackfillTarget days. Some days could not be synced.';
       });
     } catch (_) {
       if (!mounted) {
@@ -458,8 +485,11 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(() {
         _isBackfillingFitbit = false;
         _fitbitBackfillProgress = importedDays;
+        _fitbitBackfillTarget = _fitbitBackfillTarget == 0
+            ? _fitbitBackfillDays
+            : _fitbitBackfillTarget;
         _fitbitSyncResult =
-            'Imported 0 / $_fitbitBackfillDays days before sync failed';
+            'No Fitbit data was imported. Some days could not be synced.';
       });
     }
   }
@@ -597,8 +627,43 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 }
 
+List<DateTime> _buildMissingFitbitBackfillDates({
+  required List<DailyWearableMetric> existingMetrics,
+  required DateTime startDate,
+  required DateTime endDate,
+}) {
+  final metricTypesByDate = <String, Set<WearableMetricType>>{};
+  for (final metric in existingMetrics) {
+    final dateKey = _dateKey(metric.date);
+    metricTypesByDate.putIfAbsent(dateKey, () => <WearableMetricType>{}).add(
+      metric.metricType,
+    );
+  }
+
+  final missingDates = <DateTime>[];
+  var cursor = _dateOnly(startDate);
+  final end = _dateOnly(endDate);
+  while (!cursor.isAfter(end)) {
+    final metricTypes = metricTypesByDate[_dateKey(cursor)] ?? const {};
+    if (!(metricTypes.contains(WearableMetricType.sleepDurationMin) &&
+        metricTypes.contains(WearableMetricType.restingHeartRateBpm))) {
+      missingDates.add(cursor);
+    }
+    cursor = cursor.add(const Duration(days: 1));
+  }
+
+  return missingDates;
+}
+
 DateTime _dateOnly(DateTime dateTime) {
   return DateTime(dateTime.year, dateTime.month, dateTime.day);
+}
+
+String _dateKey(DateTime dateTime) {
+  final year = dateTime.year.toString().padLeft(4, '0');
+  final month = dateTime.month.toString().padLeft(2, '0');
+  final day = dateTime.day.toString().padLeft(2, '0');
+  return '$year-$month-$day';
 }
 
 String _formatDateTime(DateTime dateTime) {
