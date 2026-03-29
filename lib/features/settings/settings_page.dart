@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mood_tracker/features/wearables/data/fitbit_source_adapter.dart';
 import 'package:mood_tracker/features/wearables/data/local_wearable_repository.dart';
 import 'package:mood_tracker/features/wearables/models/daily_wearable_metric.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_metric_type.dart';
@@ -13,8 +14,11 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   final _wearableRepository = LocalWearableRepository();
+  final _fitbitAdapter = FitbitSourceAdapter(fetchSnapshot: _loadSampleFitbitData);
   bool _isSavingSample = false;
   String? _sampleSaveResult;
+  bool _isSyncingFitbit = false;
+  String? _fitbitSyncResult;
 
   @override
   Widget build(BuildContext context) {
@@ -72,6 +76,42 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
           ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Fitbit sync',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Sync today\'s Fitbit wearable metrics once.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: _isSyncingFitbit ? null : _syncFitbitData,
+                    child: Text(
+                      _isSyncingFitbit
+                          ? 'Syncing Fitbit data...'
+                          : 'Sync Fitbit data',
+                    ),
+                  ),
+                  if (_fitbitSyncResult != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      _fitbitSyncResult!,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -111,8 +151,35 @@ class _SettingsPageState extends State<SettingsPage> {
       _sampleSaveResult = 'Sample wearable data saved';
     });
   }
+
+  Future<void> _syncFitbitData() async {
+    setState(() {
+      _isSyncingFitbit = true;
+      _fitbitSyncResult = null;
+    });
+
+    final today = _dateOnly(DateTime.now());
+    final metrics = await _fitbitAdapter.fetchDailyMetrics(today);
+    await _wearableRepository.upsertDailyMetrics(metrics);
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isSyncingFitbit = false;
+      _fitbitSyncResult = 'Fitbit data synced';
+    });
+  }
 }
 
 DateTime _dateOnly(DateTime dateTime) {
   return DateTime(dateTime.year, dateTime.month, dateTime.day);
+}
+
+Future<FitbitDailySnapshot> _loadSampleFitbitData(DateTime date) async {
+  return FitbitDailySnapshot(
+    date: date,
+    sleepDurationMin: 428,
+    restingHeartRateBpm: 57,
+  );
 }
