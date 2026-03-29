@@ -185,6 +185,7 @@ class _AppShellState extends State<AppShell> {
         todayEntry: todayEntry,
         onOpenTodayLog: () => _openTodayLog(context),
         onOpenSettings: () => _openSettingsAndRefresh(context),
+        onSettingsClosed: () => _loadData(),
       ),
       TrendsPage(
         entries: _entries,

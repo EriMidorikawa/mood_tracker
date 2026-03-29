@@ -7,11 +7,13 @@ class HomePage extends StatelessWidget {
     super.key,
     required this.onOpenTodayLog,
     required this.onOpenSettings,
+    required this.onSettingsClosed,
     this.todayEntry,
   });
 
   final VoidCallback onOpenTodayLog;
   final Future<void> Function() onOpenSettings;
+  final Future<void> Function() onSettingsClosed;
   final DailyLogEntry? todayEntry;
 
   @override
@@ -22,7 +24,7 @@ class HomePage extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Home'),
         actions: [
-          SettingsMenuButton(onSettingsClosed: onOpenSettings),
+          SettingsMenuButton(onSettingsClosed: onSettingsClosed),
         ],
       ),
       body: ListView(
