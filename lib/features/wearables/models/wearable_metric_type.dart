@@ -1,17 +1,34 @@
 enum WearableMetricType {
-  restingHeartRate('resting_heart_rate'),
-  sleepMinutes('sleep_minutes'),
-  steps('steps'),
-  caloriesBurned('calories_burned');
+  sleepDurationMin(
+    'sleep_duration_min',
+    canonicalUnit: 'min',
+    aggregationRule: WearableAggregationRule.dailySum,
+  ),
+  restingHeartRateBpm(
+    'resting_heart_rate_bpm',
+    canonicalUnit: 'bpm',
+    aggregationRule: WearableAggregationRule.dailyAverage,
+  );
 
-  const WearableMetricType(this.storageKey);
+  const WearableMetricType(
+    this.storageKey, {
+    required this.canonicalUnit,
+    required this.aggregationRule,
+  });
 
   final String storageKey;
+  final String canonicalUnit;
+  final WearableAggregationRule aggregationRule;
 
   static WearableMetricType fromStorageKey(String value) {
     return WearableMetricType.values.firstWhere(
       (metricType) => metricType.storageKey == value,
-      orElse: () => WearableMetricType.steps,
+      orElse: () => WearableMetricType.sleepDurationMin,
     );
   }
+}
+
+enum WearableAggregationRule {
+  dailySum,
+  dailyAverage,
 }

@@ -85,6 +85,46 @@ class LocalWearableRepository {
     );
   }
 
+  Future<DailyWearableMetric?> aggregateDailyMetric({
+    required WearableProvider provider,
+    required WearableMetricType metricType,
+    required DateTime date,
+  }) async {
+    final day = _dateOnly(date);
+    final measurements = await loadMeasurements(
+      provider: provider,
+      metricType: metricType,
+    );
+
+    final values = [
+      for (final measurement in measurements)
+        if (_dateOnly(measurement.recordedAt) == day) measurement.value,
+    ];
+
+    // Keep the same missing-data policy as Daily Log / Trends:
+    // no record for the day means no value for the day.
+    if (values.isEmpty) {
+      return null;
+    }
+
+    final aggregatedValue = switch (metricType.aggregationRule) {
+      WearableAggregationRule.dailySum => values.fold<double>(
+          0,
+          (sum, value) => sum + value,
+        ),
+      WearableAggregationRule.dailyAverage =>
+        values.reduce((sum, value) => sum + value) / values.length,
+    };
+
+    return DailyWearableMetric(
+      provider: provider,
+      metricType: metricType,
+      date: day,
+      value: aggregatedValue,
+      unit: metricType.canonicalUnit,
+    );
+  }
+
   Future<List<DailyWearableMetric>> loadDailyMetrics({
     WearableProvider? provider,
     WearableMetricType? metricType,
@@ -117,4 +157,8 @@ class LocalWearableRepository {
       ]),
     );
   }
+}
+
+DateTime _dateOnly(DateTime dateTime) {
+  return DateTime(dateTime.year, dateTime.month, dateTime.day);
 }
