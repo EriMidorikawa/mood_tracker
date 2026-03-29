@@ -85,7 +85,7 @@ class HistoryPage extends StatelessWidget {
           onSave: onSaveEntry,
           popOnSave: true,
           showSettingsMenu: false,
-          title: 'Edit Log',
+          title: 'Edit ${_formatDate(entry.loggedAt)}',
         ),
       ),
     );
