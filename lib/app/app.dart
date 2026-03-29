@@ -6,7 +6,10 @@ import 'package:mood_tracker/features/daily_log/daily_log_page.dart';
 import 'package:mood_tracker/features/history/history_page.dart';
 import 'package:mood_tracker/features/home/home_page.dart';
 import 'package:mood_tracker/features/trends/trends_page.dart';
+import 'package:mood_tracker/features/wearables/data/fitbit_api_client.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_callback_link_service.dart';
+import 'package:mood_tracker/features/wearables/data/fitbit_oauth_token_store.dart';
+import 'package:mood_tracker/features/wearables/data/fitbit_source_adapter.dart';
 import 'package:mood_tracker/features/wearables/data/local_wearable_repository.dart';
 import 'package:mood_tracker/features/wearables/models/daily_wearable_metric.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_connection.dart';
@@ -43,6 +46,7 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   final _repository = LocalDailyLogRepository();
   final _wearableRepository = LocalWearableRepository();
+  final _fitbitTokenStore = FitbitOAuthTokenStore();
   final _fitbitCallbackLinkService = FitbitCallbackLinkService();
   int _selectedIndex = 0;
   List<DailyLogEntry> _entries = const [];
@@ -72,7 +76,7 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _loadDataAndMaybeAutoSync();
     _fitbitCallbackLinkService.start();
   }
 
@@ -98,6 +102,64 @@ class _AppShellState extends State<AppShell> {
       _fitbitConnection = fitbitConnection;
       _isLoading = false;
     });
+  }
+
+  Future<void> _loadDataAndMaybeAutoSync() async {
+    final entries = await _repository.loadEntriesSorted();
+    final wearableMetrics = await _wearableRepository.loadDailyMetrics();
+    final fitbitConnection = await _wearableRepository.loadConnection(
+      WearableProvider.fitbit,
+    );
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _entries = entries;
+      _wearableMetrics = wearableMetrics;
+      _fitbitConnection = fitbitConnection;
+      _isLoading = false;
+    });
+
+    await _maybeAutoSyncFitbit(fitbitConnection);
+  }
+
+  Future<void> _maybeAutoSyncFitbit(WearableConnection? fitbitConnection) async {
+    if (fitbitConnection?.isConnected != true) {
+      return;
+    }
+
+    final today = _dateOnly(DateTime.now());
+    if (_dateOnly(fitbitConnection!.lastSyncedAt ?? DateTime(2000)) == today) {
+      return;
+    }
+
+    final token = await _fitbitTokenStore.loadToken();
+    if (token == null || token.isExpired) {
+      return;
+    }
+
+    try {
+      final now = DateTime.now();
+      final fitbitAdapter = FitbitSourceAdapter(
+        fetchSnapshot:
+            FitbitApiClient(accessToken: token.accessToken).fetchDailySnapshot,
+      );
+      final metrics = await fitbitAdapter.fetchDailyMetrics(today);
+      await _wearableRepository.upsertDailyMetrics(metrics);
+      await _wearableRepository.upsertConnection(
+        WearableConnection(
+          provider: WearableProvider.fitbit,
+          isConnected: true,
+          accountLabel: fitbitConnection.accountLabel,
+          connectedAt: fitbitConnection.connectedAt ?? now,
+          lastSyncedAt: now,
+        ),
+      );
+      await _loadData();
+    } catch (_) {
+      // Keep startup resilient if auto sync cannot complete.
+    }
   }
 
   Future<void> _openSettingsAndRefresh(BuildContext context) async {
@@ -225,4 +287,8 @@ class _AppShellState extends State<AppShell> {
       ),
     );
   }
+}
+
+DateTime _dateOnly(DateTime dateTime) {
+  return DateTime(dateTime.year, dateTime.month, dateTime.day);
 }
