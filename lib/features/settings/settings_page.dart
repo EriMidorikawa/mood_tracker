@@ -10,6 +10,7 @@ import 'package:mood_tracker/features/wearables/models/fitbit_oauth_preparation.
 import 'package:mood_tracker/features/wearables/models/wearable_connection.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_metric_type.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -117,6 +118,13 @@ class _SettingsPageState extends State<SettingsPage> {
                               fitbitOAuthSessionStore.prepareAuthorization();
                             },
                             child: const Text('Prepare Fitbit OAuth'),
+                          ),
+                          const SizedBox(height: 8),
+                          FilledButton.tonal(
+                            onPressed: preparation == null
+                                ? null
+                                : () => _openFitbitAuthorization(preparation),
+                            child: const Text('Open Fitbit Authorization'),
                           ),
                           if (preparation != null) ...[
                             const SizedBox(height: 8),
@@ -359,6 +367,22 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() {
       _fitbitConnection = updatedConnection;
       _fitbitSyncResult = 'Fitbit disconnected locally';
+    });
+  }
+
+  Future<void> _openFitbitAuthorization(
+    FitbitOAuthPreparation preparation,
+  ) async {
+    final opened = await launchUrl(
+      preparation.authorizationUri,
+      mode: LaunchMode.externalApplication,
+    );
+    if (!mounted || opened) {
+      return;
+    }
+
+    setState(() {
+      _fitbitSyncResult = 'Could not open Fitbit authorization URL';
     });
   }
 }
