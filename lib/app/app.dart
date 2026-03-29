@@ -151,7 +151,7 @@ class _AppShellState extends State<AppShell> {
         initialEntry: _activeEntry,
         onSave: _handleSave,
       ),
-      const TrendsPage(),
+      TrendsPage(entries: _entries),
       HistoryPage(
         entries: _entries,
         loadEntryByDate: _repository.loadEntryByDate,
