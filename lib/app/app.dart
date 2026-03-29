@@ -83,7 +83,7 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _handleSave(DailyLogEntry entry) async {
-    await _repository.saveLatestEntry(entry);
+    await _repository.saveEntry(entry);
     if (!mounted) {
       return;
     }
