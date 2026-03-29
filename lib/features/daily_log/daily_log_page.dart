@@ -29,7 +29,6 @@ class _DailyLogPageState extends State<DailyLogPage> {
   late DateTime _selectedLogDate;
   late final TextEditingController _memoController;
   late Map<String, int> _initialResponses;
-  late DateTime _initialLogDate;
   late String _initialNote;
 
   @override
@@ -66,7 +65,6 @@ class _DailyLogPageState extends State<DailyLogPage> {
     _memoController.text = note;
     _setInitialState(
       responses: responses,
-      logDate: logDate,
       note: note,
     );
   }
@@ -82,7 +80,6 @@ class _DailyLogPageState extends State<DailyLogPage> {
     await widget.onSave(entry);
     _setInitialState(
       responses: _responses,
-      logDate: _selectedLogDate,
       note: entry.note,
     );
 
@@ -93,39 +90,15 @@ class _DailyLogPageState extends State<DailyLogPage> {
     Navigator.of(context).pop();
   }
 
-  Future<void> _pickLogDate() async {
-    final now = DateTime.now();
-    final pickedDate = await showDatePicker(
-      context: context,
-      initialDate: _selectedLogDate,
-      firstDate: DateTime(now.year - 5),
-      lastDate: DateTime(now.year + 1),
-    );
-
-    if (pickedDate == null) {
-      return;
-    }
-
-    setState(() {
-      _selectedLogDate = _dateOnly(pickedDate);
-    });
-  }
-
   void _setInitialState({
     required Map<String, int> responses,
-    required DateTime logDate,
     required String note,
   }) {
     _initialResponses = Map<String, int>.from(responses);
-    _initialLogDate = logDate;
     _initialNote = note;
   }
 
   bool get _hasUnsavedChanges {
-    if (_selectedLogDate != _initialLogDate) {
-      return true;
-    }
-
     if (_memoController.text.trim() != _initialNote) {
       return true;
     }
@@ -206,8 +179,6 @@ class _DailyLogPageState extends State<DailyLogPage> {
                 leading: const Icon(Icons.event_outlined),
                 title: const Text('Log date'),
                 subtitle: Text(logDate),
-                trailing: const Icon(Icons.edit_calendar_outlined),
-                onTap: _pickLogDate,
               ),
             ),
             const SizedBox(height: 16),
