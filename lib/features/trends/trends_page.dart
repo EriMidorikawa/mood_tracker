@@ -50,40 +50,18 @@ class _TrendsPageState extends State<TrendsPage> {
                 ),
           ),
           const SizedBox(height: 8),
-          SegmentedButton<_TrendMetric>(
-            style: ButtonStyle(
-              foregroundColor: WidgetStateProperty.resolveWith((states) {
-                if (states.contains(WidgetState.selected)) {
-                  return Colors.white;
-                }
-
-                return metricColor;
-              }),
-              backgroundColor: WidgetStateProperty.resolveWith((states) {
-                if (states.contains(WidgetState.selected)) {
-                  return metricColor;
-                }
-
-                return null;
-              }),
-              side: WidgetStatePropertyAll(
-                BorderSide(color: metricColor),
-              ),
-            ),
-            segments: _trendMetrics
-                .map(
-                  (metric) => ButtonSegment<_TrendMetric>(
-                    value: metric,
-                    label: Text(metric.label),
-                  ),
-                )
-                .toList(),
-            selected: {_selectedMetric},
-            onSelectionChanged: (selection) {
-              setState(() {
-                _selectedMetric = selection.first;
-              });
-            },
+          _MetricSelectorRow(
+            metrics: _mentalMetrics,
+            selectedMetric: _selectedMetric,
+            accentColor: metricColor,
+            onSelected: _handleMetricSelected,
+          ),
+          const SizedBox(height: 8),
+          _MetricSelectorRow(
+            metrics: _appetiteMetrics,
+            selectedMetric: _selectedMetric,
+            accentColor: metricColor,
+            onSelected: _handleMetricSelected,
           ),
           const SizedBox(height: 8),
           SegmentedButton<int>(
@@ -161,6 +139,68 @@ class _TrendsPageState extends State<TrendsPage> {
           ],
         ],
       ),
+    );
+  }
+
+  void _handleMetricSelected(_TrendMetric metric) {
+    setState(() {
+      _selectedMetric = metric;
+    });
+  }
+}
+
+class _MetricSelectorRow extends StatelessWidget {
+  const _MetricSelectorRow({
+    required this.metrics,
+    required this.selectedMetric,
+    required this.accentColor,
+    required this.onSelected,
+  });
+
+  final List<_TrendMetric> metrics;
+  final _TrendMetric selectedMetric;
+  final Color accentColor;
+  final ValueChanged<_TrendMetric> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SegmentedButton<_TrendMetric>(
+      emptySelectionAllowed: true,
+      style: ButtonStyle(
+        foregroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return Colors.white;
+          }
+
+          return accentColor;
+        }),
+        backgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return accentColor;
+          }
+
+          return null;
+        }),
+        side: WidgetStatePropertyAll(
+          BorderSide(color: accentColor),
+        ),
+      ),
+      segments: metrics
+          .map(
+            (metric) => ButtonSegment<_TrendMetric>(
+              value: metric,
+              label: Text(metric.label),
+            ),
+          )
+          .toList(),
+      selected: metrics.contains(selectedMetric) ? {selectedMetric} : const {},
+      onSelectionChanged: (selection) {
+        if (selection.isEmpty) {
+          return;
+        }
+
+        onSelected(selection.first);
+      },
     );
   }
 }
@@ -362,9 +402,20 @@ const _trendMetrics = <_TrendMetric>[
   ),
   _TrendMetric(
     key: 'sweet_craving',
-    label: 'Sweet craving',
+    label: 'Sweet Craving',
     color: Color(0xFFD14E7A),
   ),
+];
+
+final _mentalMetrics = <_TrendMetric>[
+  _trendMetrics[0],
+  _trendMetrics[1],
+  _trendMetrics[2],
+];
+
+final _appetiteMetrics = <_TrendMetric>[
+  _trendMetrics[3],
+  _trendMetrics[4],
 ];
 
 List<_MetricPoint> _buildMetricPoints({
