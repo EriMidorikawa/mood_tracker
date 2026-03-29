@@ -293,7 +293,7 @@ class _TrendsPageState extends State<TrendsPage> {
                 const SizedBox(height: 16),
                 _WearableMetricSection(
                   title: 'Sleep Duration',
-                  unitLabel: 'min',
+                  unitLabel: 'hours',
                   color: _wearableMetrics[0].color,
                   chartData: sleepChartData,
                 ),
@@ -1053,10 +1053,11 @@ _ChartYAxisSpec _buildWearableYAxisSpec(
   if (presentValues.isEmpty) {
     switch (metricType) {
       case WearableMetricType.sleepDurationMin:
-        return const _ChartYAxisSpec.fixed(
+        return _ChartYAxisSpec.fixed(
           min: 0,
           max: 600,
           ticks: [0, 300, 600],
+          labelBuilder: _formatSleepDurationAxisLabel,
         );
       case WearableMetricType.restingHeartRateBpm:
         return const _ChartYAxisSpec.fixed(
@@ -1088,6 +1089,9 @@ _ChartYAxisSpec _buildWearableYAxisSpec(
     min: min,
     max: max,
     ticks: [min, mid, max],
+    labelBuilder: metricType == WearableMetricType.sleepDurationMin
+        ? _formatSleepDurationAxisLabel
+        : null,
   );
 }
 
@@ -1231,7 +1235,8 @@ class _ChartYAxisSpec {
     required this.min,
     required this.max,
     required this.ticks,
-  }) : labelBuilder = null;
+    this.labelBuilder,
+  });
 
   final double min;
   final double max;
@@ -1252,6 +1257,11 @@ class _ChartYAxisSpec {
 
   @override
   int get hashCode => Object.hash(min, max, ticks.length);
+}
+
+String _formatSleepDurationAxisLabel(double minutes) {
+  final roundedHours = (minutes / 60).round();
+  return '${roundedHours}h';
 }
 
 const _trendMetrics = <_TrendMetric>[

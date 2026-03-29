@@ -387,7 +387,7 @@ class _HistoryDayDetailPageState extends State<_HistoryDayDetailPage> {
                     if (sleepMetric != null) ...[
                       _DetailRow(
                         label: 'Sleep Duration',
-                        value: '${sleepMetric.value.round()} min',
+                        value: _formatSleepDuration(sleepMetric.value),
                       ),
                       const SizedBox(height: 8),
                     ],
@@ -553,4 +553,11 @@ String _formatMonthYear(DateTime dateTime) {
   ];
 
   return '${months[dateTime.month - 1]} ${dateTime.year}';
+}
+
+String _formatSleepDuration(double minutes) {
+  final totalMinutes = minutes.round();
+  final hours = totalMinutes ~/ 60;
+  final remainingMinutes = totalMinutes % 60;
+  return '${hours}h ${remainingMinutes}m';
 }
