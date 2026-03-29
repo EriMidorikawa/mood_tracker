@@ -191,6 +191,16 @@ class LocalWearableRepository {
 
     await saveDailyMetrics(nextMetrics);
   }
+
+  Future<void> clearDailyMetrics() async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.remove(_dailyMetricsKey);
+  }
+
+  Future<void> clearConnections() async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.remove(_connectionsKey);
+  }
 }
 
 DateTime _dateOnly(DateTime dateTime) {

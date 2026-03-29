@@ -66,6 +66,12 @@ class LocalDailyLogRepository {
     await preferences.setString(_entriesByDateKey, jsonEncode(encodedEntries));
     await preferences.setString(_latestEntryKey, entry.toJsonString());
   }
+
+  Future<void> clear() async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.remove(_latestEntryKey);
+    await preferences.remove(_entriesByDateKey);
+  }
 }
 
 String _dateKey(DateTime dateTime) {

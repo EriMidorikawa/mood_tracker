@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mood_tracker/features/daily_log/data/local_daily_log_repository.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_api_client.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_callback_debug_store.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_oauth_client.dart';
@@ -24,6 +25,7 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   static const _fitbitBackfillDays = 30;
 
+  final _dailyLogRepository = LocalDailyLogRepository();
   final _wearableRepository = LocalWearableRepository();
   final _fitbitOAuthClient = FitbitOAuthClient();
   final _fitbitTokenStore = FitbitOAuthTokenStore();
@@ -179,9 +181,96 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
           ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Danger Zone',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Reset local app data',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'This will remove local daily logs, wearable data, saved Fitbit session, and connection state.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Fitbit account data on Fitbit will not be deleted.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 16),
+                  OutlinedButton(
+                    onPressed: _resetLocalAppData,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.error,
+                    ),
+                    child: const Text('Reset local app data'),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _resetLocalAppData() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Reset local app data?'),
+          content: const Text(
+            'This removes local daily logs, wearable data, Fitbit session, and connection state on this device only.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Reset'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    await _dailyLogRepository.clear();
+    await _wearableRepository.clearDailyMetrics();
+    await _wearableRepository.clearConnections();
+    await _fitbitTokenStore.clear();
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _fitbitConnection = null;
+      _isSyncingFitbit = false;
+      _isBackfillingFitbit = false;
+      _fitbitBackfillProgress = 0;
+      _fitbitBackfillTarget = _fitbitBackfillDays;
+      _isHandlingFitbitCallback = false;
+      _fitbitSyncResult = 'Local app data has been reset.';
+    });
   }
 
   Future<void> _syncFitbitData() async {

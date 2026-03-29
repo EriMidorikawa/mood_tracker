@@ -20,4 +20,9 @@ class FitbitOAuthTokenStore {
     final preferences = await SharedPreferences.getInstance();
     await preferences.setString(_tokenKey, jsonEncode(token.toJson()));
   }
+
+  Future<void> clear() async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.remove(_tokenKey);
+  }
 }
