@@ -173,7 +173,7 @@ class _TrendsPageState extends State<TrendsPage> {
                   secondaryMetric == null
                       ? primaryMetric.label
                       : '${primaryMetric.label} + ${secondaryMetric.label}',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         color: primaryMetric.color,
                         fontWeight: FontWeight.w700,
                       ),
@@ -257,7 +257,7 @@ class _TrendsPageState extends State<TrendsPage> {
                 ),
                 const SizedBox(height: 16),
                 _InteractiveTrendChart(
-                  height: 320,
+                  height: 150,
                   chartData: subjectiveChartData,
                   emptyMessage: subjectiveChartData.hasAnyData
                       ? null
@@ -300,7 +300,7 @@ class _TrendsPageState extends State<TrendsPage> {
               children: [
                 Text(
                   'Fitbit daily metrics',
-                  style: Theme.of(context).textTheme.titleMedium,
+                  style: Theme.of(context).textTheme.titleSmall,
                 ),
                 const SizedBox(height: 16),
                 _WearableMetricSection(
@@ -412,14 +412,14 @@ class _WearableMetricSection extends StatelessWidget {
       children: [
         Text(
           '$title ($unitLabel)',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 color: color,
                 fontWeight: FontWeight.w700,
               ),
         ),
         const SizedBox(height: 12),
         _InteractiveTrendChart(
-          height: 220,
+          height: 160,
           chartData: chartData,
           emptyMessage: chartData.hasAnyData
               ? null
@@ -517,16 +517,14 @@ class _TrendPointDetailCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            detail.seriesLabel,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: detail.color,
-                  fontWeight: FontWeight.w700,
-                ),
+            detail.dateLabel,
+            style: Theme.of(context).textTheme.bodySmall,
           ),
-          const SizedBox(height: 4),
-          Text(detail.dateLabel),
           const SizedBox(height: 2),
-          Text(detail.valueLabel),
+          Text(
+            detail.valueLabel,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
         ],
       ),
     );
@@ -598,7 +596,7 @@ class _MetricChoiceChip extends StatelessWidget {
               metric.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
                     color: isSelected ? metric.color : colorScheme.onSurface,
                     fontWeight: FontWeight.w600,
                   ),
@@ -679,7 +677,7 @@ class _TrendChartPainter extends CustomPainter {
       ..strokeWidth = 1;
     final axisTextStyle = const TextStyle(
       color: Color(0xFF6D7488),
-      fontSize: 12,
+      fontSize: 11,
     );
 
     for (final value in yAxisSpec.ticks) {
