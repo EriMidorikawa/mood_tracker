@@ -10,11 +10,11 @@ void main() {
     expect(find.text('Dashboard'), findsNWidgets(2));
     expect(find.text('Daily Log'), findsOneWidget);
     expect(find.text('Trends'), findsOneWidget);
-    expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('History'), findsOneWidget);
 
     await tester.tap(find.text('Trends'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Patterns and charts will be added here.'), findsOneWidget);
+    expect(find.text('Mood'), findsOneWidget);
   });
 }

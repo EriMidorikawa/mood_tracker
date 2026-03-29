@@ -10,6 +10,7 @@ class DailyLogPage extends StatefulWidget {
     this.popOnSave = false,
     this.showSettingsMenu = true,
     this.title = 'Daily Log',
+    this.initialDate,
     this.initialEntry,
     required this.onSave,
   });
@@ -17,6 +18,7 @@ class DailyLogPage extends StatefulWidget {
   final bool popOnSave;
   final bool showSettingsMenu;
   final String title;
+  final DateTime? initialDate;
   final DailyLogEntry? initialEntry;
   final Future<void> Function(DailyLogEntry) onSave;
 
@@ -57,7 +59,9 @@ class _DailyLogPageState extends State<DailyLogPage> {
       for (final question in dailyLogQuestions)
         question.id: entry?.responses[question.id] ?? 3,
     };
-    final logDate = _dateOnly(entry?.loggedAt ?? DateTime.now());
+    final logDate = _dateOnly(
+      entry?.loggedAt ?? widget.initialDate ?? DateTime.now(),
+    );
     final note = entry?.note ?? '';
 
     _responses = responses;
