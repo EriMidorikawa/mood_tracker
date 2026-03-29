@@ -330,6 +330,10 @@ class _MetricChartPainter extends CustomPainter {
     final gridPaint = Paint()
       ..color = colorScheme.outlineVariant
       ..strokeWidth = 1;
+    final tickPaint = Paint()
+      ..color = colorScheme.outline.withValues(alpha: 0.65)
+      ..strokeWidth = 1
+      ..strokeCap = StrokeCap.round;
     final linePaint = Paint()
       ..color = accentColor.withValues(alpha: 0.45)
       ..strokeWidth = 2
@@ -338,9 +342,6 @@ class _MetricChartPainter extends CustomPainter {
     final pointPaint = Paint()
       ..color = accentColor
       ..style = PaintingStyle.fill;
-    final missingPaint = Paint()
-      ..color = colorScheme.outline
-      ..strokeWidth = 1.5;
     final monthLinePaint = Paint()
       ..color = colorScheme.outline.withValues(alpha: 0.45)
       ..strokeWidth = 1;
@@ -368,12 +369,6 @@ class _MetricChartPainter extends CustomPainter {
       final x = stepX * index;
 
       if (point.value == null) {
-        final centerY = size.height / 2;
-        canvas.drawLine(
-          Offset(x, centerY - 6),
-          Offset(x, centerY + 6),
-          missingPaint,
-        );
         previousPoint = null;
         previousIndex = -1;
         continue;
@@ -391,6 +386,17 @@ class _MetricChartPainter extends CustomPainter {
       canvas.drawCircle(currentPoint, 4, pointPaint);
       previousPoint = currentPoint;
       previousIndex = index;
+    }
+
+    final tickY = _yForValue(3, size.height);
+    final tickHalfHeight = 3.5;
+    for (var index = 0; index < points.length; index++) {
+      final x = stepX * index;
+      canvas.drawLine(
+        Offset(x, tickY - tickHalfHeight),
+        Offset(x, tickY + tickHalfHeight),
+        tickPaint,
+      );
     }
   }
 
