@@ -168,27 +168,26 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _handleSave(DailyLogEntry entry) async {
-    await _repository.saveEntry(entry);
-    final entries = await _repository.loadEntriesSorted();
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _entries = entries;
-      _selectedIndex = 0;
-    });
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scaffoldMessengerKey.currentState
-        ?..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(content: Text('Daily log saved locally.')),
-        );
-    });
+    await _saveEntryAndRefreshUi(
+      entry,
+      selectedIndex: 0,
+      snackBarMessage: 'Daily log saved locally.',
+    );
   }
 
   Future<void> _saveEntryFromHistory(DailyLogEntry entry) async {
+    await _saveEntryAndRefreshUi(
+      entry,
+      selectedIndex: 2,
+      snackBarMessage: 'History log updated.',
+    );
+  }
+
+  Future<void> _saveEntryAndRefreshUi(
+    DailyLogEntry entry, {
+    required int selectedIndex,
+    required String snackBarMessage,
+  }) async {
     await _repository.saveEntry(entry);
     final entries = await _repository.loadEntriesSorted();
     if (!mounted) {
@@ -197,14 +196,14 @@ class _AppShellState extends State<AppShell> {
 
     setState(() {
       _entries = entries;
-      _selectedIndex = 2;
+      _selectedIndex = selectedIndex;
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scaffoldMessengerKey.currentState
         ?..hideCurrentSnackBar()
         ..showSnackBar(
-          const SnackBar(content: Text('History log updated.')),
+          SnackBar(content: Text(snackBarMessage)),
         );
     });
   }
