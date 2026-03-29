@@ -29,8 +29,6 @@ class _SettingsPageState extends State<SettingsPage> {
   final _fitbitOAuthClient = FitbitOAuthClient();
   final _fitbitTokenStore = FitbitOAuthTokenStore();
   WearableConnection? _fitbitConnection;
-  bool _isSavingSample = false;
-  String? _sampleSaveResult;
   bool _isSyncingFitbit = false;
   bool _isBackfillingFitbit = false;
   int _fitbitBackfillProgress = 0;
@@ -80,51 +78,27 @@ class _SettingsPageState extends State<SettingsPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Wearable debug',
+                    'Fitbit',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Save sample daily metrics for today.',
+                    'Connect Fitbit and sync your recent sleep and resting heart rate data.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 16),
-                  FilledButton(
-                    onPressed: _isSavingSample ? null : _saveSampleWearableData,
-                    child: Text(
-                      _isSavingSample
-                          ? 'Saving sample wearable data...'
-                          : 'Save sample wearable data',
-                    ),
-                  ),
-                  if (_sampleSaveResult != null) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      _sampleSaveResult!,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
                   Text(
-                    'Fitbit sync',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Sync today\'s Fitbit wearable metrics once.',
+                    'Status: $_fitbitStatusLabel',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 4),
+                  Text(
+                    _fitbitConnection?.lastSyncedAt != null
+                        ? 'Last synced: ${_formatDateTime(_fitbitConnection!.lastSyncedAt!)}'
+                        : 'Last synced: Never',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 16),
                   ValueListenableBuilder<FitbitOAuthPreparation?>(
                     valueListenable: fitbitOAuthSessionStore.preparedSession,
                     builder: (context, preparation, _) {
@@ -135,32 +109,15 @@ class _SettingsPageState extends State<SettingsPage> {
                             onPressed: () {
                               fitbitOAuthSessionStore.prepareAuthorization();
                             },
-                            child: const Text('Prepare Fitbit OAuth'),
+                            child: const Text('Prepare authorization'),
                           ),
                           const SizedBox(height: 8),
                           FilledButton.tonal(
                             onPressed: preparation == null
                                 ? null
                                 : () => _openFitbitAuthorization(preparation),
-                            child: const Text('Open Fitbit Authorization'),
+                            child: const Text('Open Fitbit authorization'),
                           ),
-                          if (preparation != null) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              'Prepared Fitbit OAuth state: ${preparation.state}',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Prepared code challenge: ${preparation.codeChallenge}',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Prepared auth URL: ${preparation.authorizationUri}',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
                         ],
                       );
                     },
@@ -209,18 +166,6 @@ class _SettingsPageState extends State<SettingsPage> {
                     },
                   ),
                   const SizedBox(height: 12),
-                  Text(
-                    'Status: $_fitbitStatusLabel',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _fitbitConnection?.lastSyncedAt != null
-                        ? 'Last synced: ${_formatDateTime(_fitbitConnection!.lastSyncedAt!)}'
-                        : 'Last synced: Never',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 16),
                   FilledButton(
                     onPressed: _isSyncingFitbit ? null : _syncFitbitData,
                     child: Text(
@@ -266,41 +211,6 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
       ),
     );
-  }
-
-  Future<void> _saveSampleWearableData() async {
-    setState(() {
-      _isSavingSample = true;
-      _sampleSaveResult = null;
-    });
-
-    final today = _dateOnly(DateTime.now());
-    final sampleMetrics = [
-      DailyWearableMetric(
-        provider: WearableProvider.manual,
-        metricType: WearableMetricType.sleepDurationMin,
-        date: today,
-        value: 435,
-        unit: WearableMetricType.sleepDurationMin.canonicalUnit,
-      ),
-      DailyWearableMetric(
-        provider: WearableProvider.manual,
-        metricType: WearableMetricType.restingHeartRateBpm,
-        date: today,
-        value: 58,
-        unit: WearableMetricType.restingHeartRateBpm.canonicalUnit,
-      ),
-    ];
-
-    await _wearableRepository.upsertDailyMetrics(sampleMetrics);
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _isSavingSample = false;
-      _sampleSaveResult = 'Sample wearable data saved';
-    });
   }
 
   Future<void> _syncFitbitData() async {

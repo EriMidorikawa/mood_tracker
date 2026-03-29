@@ -200,7 +200,7 @@ class _WeekdayHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const labels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     return Row(
       children: [
         for (final label in labels)
@@ -609,7 +609,7 @@ List<_ManualSummary> _manualSummaries(DailyLogEntry entry) {
 List<DateTime?> _buildMonthCells(DateTime month) {
   final firstDay = DateTime(month.year, month.month, 1);
   final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
-  final leadingEmpty = firstDay.weekday - DateTime.monday;
+  final leadingEmpty = firstDay.weekday % DateTime.daysPerWeek;
 
   return [
     for (var i = 0; i < leadingEmpty; i++) null,
