@@ -26,6 +26,9 @@ class _TrendsPageState extends State<TrendsPage> {
   _TrendMetricId? _comparisonMetric;
   _TrendPeriod _selectedPeriod = _TrendPeriod.sevenDays;
   int? _selectedYear;
+  _ChartPointDetail? _selectedManualPoint;
+  _ChartPointDetail? _selectedSleepPoint;
+  _ChartPointDetail? _selectedHeartPoint;
 
   @override
   void initState() {
@@ -120,6 +123,9 @@ class _TrendsPageState extends State<TrendsPage> {
             onSelectionChanged: (selection) {
               setState(() {
                 _selectedPeriod = selection.first;
+                _selectedManualPoint = null;
+                _selectedSleepPoint = null;
+                _selectedHeartPoint = null;
                 if (_selectedPeriod == _TrendPeriod.oneYear &&
                     !_availableYears.contains(_selectedYear)) {
                   _selectedYear = _availableYears.lastOrNull;
@@ -150,6 +156,9 @@ class _TrendsPageState extends State<TrendsPage> {
 
                 setState(() {
                   _selectedYear = value;
+                  _selectedManualPoint = null;
+                  _selectedSleepPoint = null;
+                  _selectedHeartPoint = null;
                 });
               },
             ),
@@ -247,25 +256,24 @@ class _TrendsPageState extends State<TrendsPage> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                SizedBox(
+                _InteractiveTrendChart(
                   height: 320,
-                  child: CustomPaint(
-                    painter: _TrendChartPainter(
-                      series: subjectiveChartData.series,
-                      xAxisLabels: subjectiveChartData.xAxisLabels,
-                      verticalMarkers: subjectiveChartData.verticalMarkers,
-                      emptyMessage: subjectiveChartData.hasAnyData
-                          ? null
-                          : 'No manual logs in this period.',
-                      yAxisSpec: const _ChartYAxisSpec.fixed(
-                        min: 1,
-                        max: 5,
-                        ticks: [1, 2, 3, 4, 5],
-                      ),
-                      showCenterReferenceTicks: true,
-                    ),
-                    child: const SizedBox.expand(),
+                  chartData: subjectiveChartData,
+                  emptyMessage: subjectiveChartData.hasAnyData
+                      ? null
+                      : 'No manual logs in this period.',
+                  yAxisSpec: const _ChartYAxisSpec.fixed(
+                    min: 1,
+                    max: 5,
+                    ticks: [1, 2, 3, 4, 5],
                   ),
+                  showCenterReferenceTicks: true,
+                  selectedDetail: _selectedManualPoint,
+                  onPointSelected: (detail) {
+                    setState(() {
+                      _selectedManualPoint = detail;
+                    });
+                  },
                 ),
                 if (secondaryMetric != null) ...[
                   const SizedBox(height: 12),
@@ -300,6 +308,12 @@ class _TrendsPageState extends State<TrendsPage> {
                   unitLabel: 'hours',
                   color: _wearableMetrics[0].color,
                   chartData: sleepChartData,
+                  selectedDetail: _selectedSleepPoint,
+                  onPointSelected: (detail) {
+                    setState(() {
+                      _selectedSleepPoint = detail;
+                    });
+                  },
                 ),
                 const SizedBox(height: 20),
                 _WearableMetricSection(
@@ -307,6 +321,12 @@ class _TrendsPageState extends State<TrendsPage> {
                   unitLabel: 'bpm',
                   color: _wearableMetrics[1].color,
                   chartData: heartChartData,
+                  selectedDetail: _selectedHeartPoint,
+                  onPointSelected: (detail) {
+                    setState(() {
+                      _selectedHeartPoint = detail;
+                    });
+                  },
                 ),
               ],
             ),
@@ -319,6 +339,7 @@ class _TrendsPageState extends State<TrendsPage> {
   void _handlePrimaryMetricSelected(_TrendMetricId metric) {
     setState(() {
       _selectedMetric = metric;
+      _selectedManualPoint = null;
       if (_comparisonMetric == metric) {
         _comparisonMetric = null;
       }
@@ -328,6 +349,7 @@ class _TrendsPageState extends State<TrendsPage> {
   void _handleCompareMetricSelected(_TrendMetricId? metric) {
     setState(() {
       _comparisonMetric = metric;
+      _selectedManualPoint = null;
     });
   }
 }
@@ -372,12 +394,16 @@ class _WearableMetricSection extends StatelessWidget {
     required this.unitLabel,
     required this.color,
     required this.chartData,
+    required this.selectedDetail,
+    required this.onPointSelected,
   });
 
   final String title;
   final String unitLabel;
   final Color color;
   final _TrendChartData chartData;
+  final _ChartPointDetail? selectedDetail;
+  final ValueChanged<_ChartPointDetail?> onPointSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -392,23 +418,117 @@ class _WearableMetricSection extends StatelessWidget {
               ),
         ),
         const SizedBox(height: 12),
-        SizedBox(
+        _InteractiveTrendChart(
           height: 220,
-          child: CustomPaint(
-            painter: _TrendChartPainter(
-              series: chartData.series,
-              xAxisLabels: chartData.xAxisLabels,
-              verticalMarkers: chartData.verticalMarkers,
-              emptyMessage: chartData.hasAnyData
-                  ? null
-                  : 'No wearable data in this period.',
-              yAxisSpec: chartData.yAxisSpec!,
-              showCenterReferenceTicks: false,
-            ),
-            child: const SizedBox.expand(),
-          ),
+          chartData: chartData,
+          emptyMessage: chartData.hasAnyData
+              ? null
+              : 'No wearable data in this period.',
+          yAxisSpec: chartData.yAxisSpec!,
+          showCenterReferenceTicks: false,
+          selectedDetail: selectedDetail,
+          onPointSelected: onPointSelected,
         ),
       ],
+    );
+  }
+}
+
+class _InteractiveTrendChart extends StatelessWidget {
+  const _InteractiveTrendChart({
+    required this.height,
+    required this.chartData,
+    required this.emptyMessage,
+    required this.yAxisSpec,
+    required this.showCenterReferenceTicks,
+    required this.selectedDetail,
+    required this.onPointSelected,
+  });
+
+  final double height;
+  final _TrendChartData chartData;
+  final String? emptyMessage;
+  final _ChartYAxisSpec yAxisSpec;
+  final bool showCenterReferenceTicks;
+  final _ChartPointDetail? selectedDetail;
+  final ValueChanged<_ChartPointDetail?> onPointSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          height: height,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final size = Size(constraints.maxWidth, constraints.maxHeight);
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTapUp: (details) {
+                  onPointSelected(
+                    _findNearestPointDetail(
+                      localPosition: details.localPosition,
+                      size: size,
+                      chartData: chartData,
+                      yAxisSpec: yAxisSpec,
+                    ),
+                  );
+                },
+                child: CustomPaint(
+                  painter: _TrendChartPainter(
+                    series: chartData.series,
+                    xAxisLabels: chartData.xAxisLabels,
+                    verticalMarkers: chartData.verticalMarkers,
+                    emptyMessage: emptyMessage,
+                    yAxisSpec: yAxisSpec,
+                    showCenterReferenceTicks: showCenterReferenceTicks,
+                  ),
+                  child: const SizedBox.expand(),
+                ),
+              );
+            },
+          ),
+        ),
+        if (selectedDetail != null) ...[
+          const SizedBox(height: 12),
+          _TrendPointDetailCard(detail: selectedDetail!),
+        ],
+      ],
+    );
+  }
+}
+
+class _TrendPointDetailCard extends StatelessWidget {
+  const _TrendPointDetailCard({required this.detail});
+
+  final _ChartPointDetail detail;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: detail.color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: detail.color.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            detail.seriesLabel,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: detail.color,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: 4),
+          Text(detail.dateLabel),
+          const SizedBox(height: 2),
+          Text(detail.valueLabel),
+        ],
+      ),
     );
   }
 }
@@ -744,6 +864,12 @@ _TrendChartData _buildSubjectiveChartData({
         period,
         slotDates,
       ),
+      pointDetails: _buildSubjectivePointDetails(
+        entries: entries,
+        metric: primaryMetric,
+        period: period,
+        slotDates: slotDates,
+      ),
       color: primaryMetric.color,
     ),
   ];
@@ -757,6 +883,12 @@ _TrendChartData _buildSubjectiveChartData({
           comparisonMetric.id.key,
           period,
           slotDates,
+        ),
+        pointDetails: _buildSubjectivePointDetails(
+          entries: entries,
+          metric: comparisonMetric,
+          period: period,
+          slotDates: slotDates,
         ),
         color: comparisonMetric.color,
       ),
@@ -790,6 +922,12 @@ _TrendChartData _buildWearableChartData({
       _ChartSeries(
         label: metric.label,
         values: values,
+        pointDetails: _buildWearablePointDetails(
+          metrics: metrics,
+          metric: metric,
+          period: period,
+          slotDates: slotDates,
+        ),
         color: metric.color,
       ),
     ],
@@ -798,6 +936,61 @@ _TrendChartData _buildWearableChartData({
     hasAnyData: values.any((value) => value != null),
     yAxisSpec: _buildWearableYAxisSpec(metric.metricType, values),
   );
+}
+
+List<_ChartPointDetail?> _buildSubjectivePointDetails({
+  required List<DailyLogEntry> entries,
+  required _TrendMetric metric,
+  required _TrendPeriod period,
+  required List<DateTime> slotDates,
+}) {
+  final values = _buildSubjectiveSeriesValues(
+    entries,
+    metric.id.key,
+    period,
+    slotDates,
+  );
+
+  return [
+    for (var index = 0; index < slotDates.length; index++)
+      values[index] == null
+          ? null
+          : _ChartPointDetail(
+              seriesLabel: metric.label,
+              dateLabel: _formatTrendPointDateLabel(period, slotDates[index]),
+              valueLabel: '${metric.label}: ${values[index]!.round()}',
+              color: metric.color,
+            ),
+  ];
+}
+
+List<_ChartPointDetail?> _buildWearablePointDetails({
+  required List<DailyWearableMetric> metrics,
+  required _WearableTrendMetric metric,
+  required _TrendPeriod period,
+  required List<DateTime> slotDates,
+}) {
+  final values = _buildWearableSeriesValues(
+    metrics,
+    metric.metricType,
+    period,
+    slotDates,
+  );
+
+  return [
+    for (var index = 0; index < slotDates.length; index++)
+      values[index] == null
+          ? null
+          : _ChartPointDetail(
+              seriesLabel: metric.label,
+              dateLabel: _formatTrendPointDateLabel(period, slotDates[index]),
+              valueLabel: _formatWearablePointValue(
+                metric.metricType,
+                values[index]!,
+              ),
+              color: metric.color,
+            ),
+  ];
 }
 
 List<DateTime> _buildSlotDates(_TrendPeriod period, int selectedYear) {
@@ -1130,6 +1323,35 @@ String _formatShortDate(DateTime dateTime) {
   return '${_monthName(dateTime.month)} ${dateTime.day}';
 }
 
+String _formatFullDate(DateTime dateTime) {
+  return '${_monthName(dateTime.month)} ${dateTime.day}, ${dateTime.year}';
+}
+
+String _formatTrendPointDateLabel(_TrendPeriod period, DateTime slotDate) {
+  switch (period) {
+    case _TrendPeriod.sevenDays:
+    case _TrendPeriod.thirtyDays:
+      return _formatFullDate(slotDate);
+    case _TrendPeriod.threeMonths:
+      return 'Week of ${_formatFullDate(slotDate)}';
+    case _TrendPeriod.oneYear:
+      final endDate = slotDate.add(const Duration(days: 13));
+      return '${_formatFullDate(slotDate)} - ${_formatFullDate(endDate)}';
+  }
+}
+
+String _formatWearablePointValue(
+  WearableMetricType metricType,
+  double value,
+) {
+  switch (metricType) {
+    case WearableMetricType.sleepDurationMin:
+      return 'Sleep Duration: ${_formatSleepDurationDetail(value)}';
+    case WearableMetricType.restingHeartRateBpm:
+      return 'Resting Heart Rate: ${value.round()} bpm';
+  }
+}
+
 String _monthName(int month) {
   const months = [
     'Jan',
@@ -1216,11 +1438,27 @@ class _ChartSeries {
   const _ChartSeries({
     required this.label,
     required this.values,
+    required this.pointDetails,
     required this.color,
   });
 
   final String label;
   final List<double?> values;
+  final List<_ChartPointDetail?> pointDetails;
+  final Color color;
+}
+
+class _ChartPointDetail {
+  const _ChartPointDetail({
+    required this.seriesLabel,
+    required this.dateLabel,
+    required this.valueLabel,
+    required this.color,
+  });
+
+  final String seriesLabel;
+  final String dateLabel;
+  final String valueLabel;
   final Color color;
 }
 
@@ -1266,6 +1504,62 @@ class _ChartYAxisSpec {
 String _formatSleepDurationAxisLabel(double minutes) {
   final roundedHours = (minutes / 60).round();
   return '${roundedHours}h';
+}
+
+String _formatSleepDurationDetail(double minutes) {
+  final totalMinutes = minutes.round();
+  final hours = totalMinutes ~/ 60;
+  final remainingMinutes = totalMinutes % 60;
+  return '${hours}h ${remainingMinutes}m';
+}
+
+_ChartPointDetail? _findNearestPointDetail({
+  required Offset localPosition,
+  required Size size,
+  required _TrendChartData chartData,
+  required _ChartYAxisSpec yAxisSpec,
+}) {
+  final chartRect = Rect.fromLTWH(
+    _TrendChartPainter._leftPadding,
+    _TrendChartPainter._topPadding,
+    size.width - _TrendChartPainter._leftPadding - _TrendChartPainter._rightPadding,
+    size.height - _TrendChartPainter._topPadding - _TrendChartPainter._bottomPadding,
+  );
+  const hitRadius = 20.0;
+  _ChartPointDetail? nearestDetail;
+  var nearestDistanceSquared = hitRadius * hitRadius;
+
+  for (final series in chartData.series) {
+    for (var index = 0; index < series.values.length; index++) {
+      final value = series.values[index];
+      final detail = series.pointDetails[index];
+      if (value == null || detail == null) {
+        continue;
+      }
+
+      final point = Offset(
+        _TrendChartPainter._xForRatio(
+          chartRect,
+          _TrendChartPainter._ratioForIndex(index, series.values.length),
+        ),
+        _TrendChartPainter._yForValue(
+          chartRect,
+          value,
+          yAxisSpec.min,
+          yAxisSpec.max,
+        ),
+      );
+      final dx = localPosition.dx - point.dx;
+      final dy = localPosition.dy - point.dy;
+      final distanceSquared = dx * dx + dy * dy;
+      if (distanceSquared <= nearestDistanceSquared) {
+        nearestDistanceSquared = distanceSquared;
+        nearestDetail = detail;
+      }
+    }
+  }
+
+  return nearestDetail;
 }
 
 const _trendMetrics = <_TrendMetric>[
