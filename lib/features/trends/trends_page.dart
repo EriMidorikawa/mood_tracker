@@ -3,10 +3,7 @@ import 'package:mood_tracker/app/settings_menu_button.dart';
 import 'package:mood_tracker/features/daily_log/models/daily_log_entry.dart';
 
 class TrendsPage extends StatefulWidget {
-  const TrendsPage({
-    super.key,
-    required this.entries,
-  });
+  const TrendsPage({super.key, required this.entries});
 
   final List<DailyLogEntry> entries;
 
@@ -15,24 +12,52 @@ class TrendsPage extends StatefulWidget {
 }
 
 class _TrendsPageState extends State<TrendsPage> {
-  _TrendRange _selectedRange = _TrendRange.sevenDays;
-  _TrendMetric _selectedMetric = _trendMetrics.first;
+  _TrendMetricId _selectedMetric = _TrendMetricId.mood;
+  _TrendMetricId? _comparisonMetric;
+  _TrendPeriod _selectedPeriod = _TrendPeriod.sevenDays;
   int? _selectedYear;
 
   @override
+  void initState() {
+    super.initState();
+    _selectedYear = _availableYears.lastOrNull ?? DateTime.now().year;
+  }
+
+  @override
+  void didUpdateWidget(covariant TrendsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final availableYears = _availableYears;
+    if (availableYears.isEmpty) {
+      _selectedYear = DateTime.now().year;
+      return;
+    }
+
+    if (!availableYears.contains(_selectedYear)) {
+      _selectedYear = availableYears.last;
+    }
+  }
+
+  List<int> get _availableYears {
+    final years = {
+      for (final entry in widget.entries) entry.loggedAt.year,
+    }.toList()
+      ..sort();
+    return years;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final metricColor = _selectedMetric.color;
-    final availableYears = _availableYears(widget.entries);
-    final selectedYear = availableYears.contains(_selectedYear)
-        ? _selectedYear!
-        : (availableYears.isNotEmpty
-            ? availableYears.first
-            : DateTime.now().year);
-    final series = _buildTrendSeries(
+    final colorScheme = Theme.of(context).colorScheme;
+    final primaryMetric = _metricById(_selectedMetric);
+    final secondaryMetric = _comparisonMetric == null
+        ? null
+        : _metricById(_comparisonMetric!);
+    final chartData = _buildChartData(
       entries: widget.entries,
-      range: _selectedRange,
-      metricKey: _selectedMetric.key,
-      selectedYear: selectedYear,
+      primaryMetric: primaryMetric,
+      comparisonMetric: secondaryMetric,
+      period: _selectedPeriod,
+      selectedYear: _selectedYear ?? DateTime.now().year,
     );
 
     return Scaffold(
@@ -44,124 +69,205 @@ class _TrendsPageState extends State<TrendsPage> {
         padding: const EdgeInsets.all(16),
         children: [
           Text(
-            _selectedMetric.label,
+            secondaryMetric == null
+                ? primaryMetric.label
+                : '${primaryMetric.label} + ${secondaryMetric.label}',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: metricColor,
+                  color: primaryMetric.color,
+                  fontWeight: FontWeight.w700,
                 ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
           _MetricSelectorRow(
             metrics: _mentalMetrics,
             selectedMetric: _selectedMetric,
-            accentColor: metricColor,
-            onSelected: _handleMetricSelected,
+            onSelected: _handlePrimaryMetricSelected,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           _MetricSelectorRow(
             metrics: _appetiteMetrics,
             selectedMetric: _selectedMetric,
-            accentColor: metricColor,
-            onSelected: _handleMetricSelected,
+            onSelected: _handlePrimaryMetricSelected,
           ),
-          const SizedBox(height: 8),
-          SegmentedButton<_TrendRange>(
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              PopupMenuButton<_TrendMetricId?>(
+                onSelected: _handleCompareMetricSelected,
+                itemBuilder: (context) {
+                  final availableMetrics = _trendMetrics
+                      .where((metric) => metric.id != _selectedMetric)
+                      .toList();
+
+                  return [
+                    for (final metric in availableMetrics)
+                      PopupMenuItem<_TrendMetricId?>(
+                        value: metric.id,
+                        child: Text(metric.label),
+                      ),
+                    if (_comparisonMetric != null)
+                      const PopupMenuItem<_TrendMetricId?>(
+                        value: null,
+                        child: Text('Remove compare'),
+                      ),
+                  ];
+                },
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: colorScheme.outlineVariant),
+                    color: colorScheme.surface,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.add, size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        _comparisonMetric == null
+                            ? 'Compare'
+                            : 'Compare: ${secondaryMetric!.label}',
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (secondaryMetric != null)
+                InputChip(
+                  label: Text(secondaryMetric.label),
+                  avatar: CircleAvatar(
+                    radius: 8,
+                    backgroundColor: secondaryMetric.color,
+                  ),
+                  onDeleted: () {
+                    setState(() {
+                      _comparisonMetric = null;
+                    });
+                  },
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SegmentedButton<_TrendPeriod>(
             segments: const [
-              ButtonSegment<_TrendRange>(
-                value: _TrendRange.sevenDays,
+              ButtonSegment<_TrendPeriod>(
+                value: _TrendPeriod.sevenDays,
                 label: Text('7D'),
               ),
-              ButtonSegment<_TrendRange>(
-                value: _TrendRange.thirtyDays,
+              ButtonSegment<_TrendPeriod>(
+                value: _TrendPeriod.thirtyDays,
                 label: Text('30D'),
               ),
-              ButtonSegment<_TrendRange>(
-                value: _TrendRange.threeMonths,
+              ButtonSegment<_TrendPeriod>(
+                value: _TrendPeriod.threeMonths,
                 label: Text('3M'),
               ),
-              ButtonSegment<_TrendRange>(
-                value: _TrendRange.thisYear,
+              ButtonSegment<_TrendPeriod>(
+                value: _TrendPeriod.oneYear,
                 label: Text('1Y'),
               ),
             ],
-            selected: {_selectedRange},
+            selected: {_selectedPeriod},
             onSelectionChanged: (selection) {
               setState(() {
-                _selectedRange = selection.first;
+                _selectedPeriod = selection.first;
+                if (_selectedPeriod == _TrendPeriod.oneYear &&
+                    !_availableYears.contains(_selectedYear)) {
+                  _selectedYear = _availableYears.lastOrNull;
+                }
               });
             },
           ),
-          if (_selectedRange == _TrendRange.thisYear &&
-              availableYears.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: DropdownMenu<int>(
-                initialSelection: selectedYear,
-                label: const Text('Year'),
-                dropdownMenuEntries: availableYears
-                    .map(
-                      (year) => DropdownMenuEntry<int>(
-                        value: year,
-                        label: '$year',
-                      ),
-                    )
-                    .toList(),
-                onSelected: (year) {
-                  if (year == null) {
-                    return;
-                  }
-
-                  setState(() {
-                    _selectedYear = year;
-                  });
-                },
+          if (_selectedPeriod == _TrendPeriod.oneYear &&
+              _availableYears.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              initialValue: _selectedYear,
+              decoration: const InputDecoration(
+                labelText: 'Year',
+                border: OutlineInputBorder(),
               ),
+              items: [
+                for (final year in _availableYears.reversed)
+                  DropdownMenuItem<int>(
+                    value: year,
+                    child: Text('$year'),
+                  ),
+              ],
+              onChanged: (value) {
+                if (value == null) {
+                  return;
+                }
+
+                setState(() {
+                  _selectedYear = value;
+                });
+              },
             ),
           ],
           const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    height: 300,
-                    child: _MetricChart(
-                      points: series.points,
-                      accentColor: metricColor,
-                      monthMarkers: series.monthMarkers,
+          Container(
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: colorScheme.outlineVariant),
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                SizedBox(
+                  height: 320,
+                  child: CustomPaint(
+                    painter: _TrendChartPainter(
+                      series: chartData.series,
+                      xAxisLabels: chartData.xAxisLabels,
+                      verticalMarkers: chartData.verticalMarkers,
+                      emptyMessage: chartData.hasAnyData
+                          ? null
+                          : 'No logs in this period.',
+                    ),
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+                if (secondaryMetric != null) ...[
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
+                      children: [
+                        _SeriesLegendChip(metric: primaryMetric),
+                        _SeriesLegendChip(metric: secondaryMetric),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  if (series.showRangeLabels)
-                    Row(
-                      children: [
-                        Expanded(child: Text(series.startLabel)),
-                        Text(series.endLabel),
-                      ],
-                    )
-                  else
-                    _MonthAxisLabels(monthMarkers: series.monthMarkers),
                 ],
-              ),
+              ],
             ),
           ),
-          if (series.loggedCount == 0) ...[
-            const SizedBox(height: 16),
-            Text(
-              'No ${_selectedMetric.label.toLowerCase()} data was logged in this period yet.',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ],
         ],
       ),
     );
   }
 
-  void _handleMetricSelected(_TrendMetric metric) {
+  void _handlePrimaryMetricSelected(_TrendMetricId metric) {
     setState(() {
       _selectedMetric = metric;
+      if (_comparisonMetric == metric) {
+        _comparisonMetric = null;
+      }
+    });
+  }
+
+  void _handleCompareMetricSelected(_TrendMetricId? metric) {
+    setState(() {
+      _comparisonMetric = metric;
     });
   }
 }
@@ -170,325 +276,687 @@ class _MetricSelectorRow extends StatelessWidget {
   const _MetricSelectorRow({
     required this.metrics,
     required this.selectedMetric,
-    required this.accentColor,
     required this.onSelected,
   });
 
   final List<_TrendMetric> metrics;
-  final _TrendMetric selectedMetric;
-  final Color accentColor;
-  final ValueChanged<_TrendMetric> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return SegmentedButton<_TrendMetric>(
-      emptySelectionAllowed: true,
-      style: ButtonStyle(
-        foregroundColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return Colors.white;
-          }
-
-          return accentColor;
-        }),
-        backgroundColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return accentColor;
-          }
-
-          return null;
-        }),
-        side: WidgetStatePropertyAll(
-          BorderSide(color: accentColor),
-        ),
-      ),
-      segments: metrics
-          .map(
-            (metric) => ButtonSegment<_TrendMetric>(
-              value: metric,
-              label: Text(metric.label),
-            ),
-          )
-          .toList(),
-      selected: metrics.contains(selectedMetric) ? {selectedMetric} : const {},
-      onSelectionChanged: (selection) {
-        if (selection.isEmpty) {
-          return;
-        }
-
-        onSelected(selection.first);
-      },
-    );
-  }
-}
-
-class _MetricChart extends StatelessWidget {
-  const _MetricChart({
-    required this.points,
-    required this.accentColor,
-    required this.monthMarkers,
-  });
-
-  final List<_MetricPoint> points;
-  final Color accentColor;
-  final List<_MonthMarker> monthMarkers;
+  final _TrendMetricId selectedMetric;
+  final ValueChanged<_TrendMetricId> onSelected;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        SizedBox(
-          width: 24,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text('5'),
-              Text('4'),
-              Text('3'),
-              Text('2'),
-              Text('1'),
-            ],
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: CustomPaint(
-            painter: _MetricChartPainter(
-              points: points,
-              colorScheme: Theme.of(context).colorScheme,
-              accentColor: accentColor,
-              monthMarkers: monthMarkers,
+        for (var index = 0; index < metrics.length; index++) ...[
+          if (index > 0) const SizedBox(width: 8),
+          Expanded(
+            child: _MetricChoiceChip(
+              metric: metrics[index],
+              isSelected: metrics[index].id == selectedMetric,
+              onSelected: () => onSelected(metrics[index].id),
             ),
-            child: const SizedBox.expand(),
           ),
-        ),
+        ],
       ],
     );
   }
 }
 
-class _MetricChartPainter extends CustomPainter {
-  const _MetricChartPainter({
-    required this.points,
-    required this.colorScheme,
-    required this.accentColor,
-    required this.monthMarkers,
+class _MetricChoiceChip extends StatelessWidget {
+  const _MetricChoiceChip({
+    required this.metric,
+    required this.isSelected,
+    required this.onSelected,
   });
 
-  final List<_MetricPoint> points;
-  final ColorScheme colorScheme;
-  final Color accentColor;
-  final List<_MonthMarker> monthMarkers;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final gridPaint = Paint()
-      ..color = colorScheme.outlineVariant
-      ..strokeWidth = 1;
-    final tickPaint = Paint()
-      ..color = colorScheme.outline.withValues(alpha: 0.65)
-      ..strokeWidth = 1
-      ..strokeCap = StrokeCap.round;
-    final linePaint = Paint()
-      ..color = accentColor.withValues(alpha: 0.45)
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-    final pointPaint = Paint()
-      ..color = accentColor
-      ..style = PaintingStyle.fill;
-    final monthLinePaint = Paint()
-      ..color = colorScheme.outline.withValues(alpha: 0.45)
-      ..strokeWidth = 1;
-
-    for (var scale = 1; scale <= 5; scale++) {
-      final y = _yForValue(scale.toDouble(), size.height);
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
-    }
-
-    for (final marker in monthMarkers) {
-      final x = size.width * marker.position;
-      canvas.drawLine(
-        Offset(x, 0),
-        Offset(x, size.height),
-        monthLinePaint,
-      );
-    }
-
-    final stepX = points.length == 1 ? 0.0 : size.width / (points.length - 1);
-    Offset? previousPoint;
-    var previousIndex = -1;
-
-    for (var index = 0; index < points.length; index++) {
-      final point = points[index];
-      final x = stepX * index;
-
-      if (point.value == null) {
-        previousPoint = null;
-        previousIndex = -1;
-        continue;
-      }
-
-      final currentPoint = Offset(
-        x,
-        _yForValue(point.value!, size.height),
-      );
-
-      if (previousPoint != null && previousIndex == index - 1) {
-        canvas.drawLine(previousPoint, currentPoint, linePaint);
-      }
-
-      canvas.drawCircle(currentPoint, 4, pointPaint);
-      previousPoint = currentPoint;
-      previousIndex = index;
-    }
-
-    final tickY = _yForValue(3, size.height);
-    final tickHalfHeight = 3.5;
-    for (var index = 0; index < points.length; index++) {
-      final x = stepX * index;
-      canvas.drawLine(
-        Offset(x, tickY - tickHalfHeight),
-        Offset(x, tickY + tickHalfHeight),
-        tickPaint,
-      );
-    }
-  }
-
-  double _yForValue(double value, double height) {
-    final normalized = (5 - value) / 4;
-    return normalized * height;
-  }
-
-  @override
-  bool shouldRepaint(covariant _MetricChartPainter oldDelegate) {
-    return oldDelegate.points != points ||
-        oldDelegate.colorScheme != colorScheme ||
-        oldDelegate.accentColor != accentColor ||
-        oldDelegate.monthMarkers != monthMarkers;
-  }
-}
-
-class _MonthAxisLabels extends StatelessWidget {
-  const _MonthAxisLabels({
-    required this.monthMarkers,
-  });
-
-  final List<_MonthMarker> monthMarkers;
+  final _TrendMetric metric;
+  final bool isSelected;
+  final VoidCallback onSelected;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 20,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return Stack(
-            children: [
-              for (final marker in monthMarkers)
-                if (marker.showLabel)
-                Positioned(
-                  left: (constraints.maxWidth * marker.position).clamp(
-                    0.0,
-                    constraints.maxWidth - 28,
+    final colorScheme = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onSelected,
+        child: Ink(
+          decoration: BoxDecoration(
+            color: isSelected
+                ? metric.color.withValues(alpha: 0.18)
+                : colorScheme.surface,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: isSelected ? metric.color : colorScheme.outlineVariant,
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Center(
+            child: Text(
+              metric.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: isSelected ? metric.color : colorScheme.onSurface,
+                    fontWeight: FontWeight.w600,
                   ),
-                  child: Text(
-                    marker.label,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
-            ],
-          );
-        },
+            ),
+          ),
+        ),
       ),
     );
   }
 }
 
-class _MetricPoint {
-  const _MetricPoint({
-    required this.date,
-    required this.value,
+class _SeriesLegendChip extends StatelessWidget {
+  const _SeriesLegendChip({required this.metric});
+
+  final _TrendMetric metric;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: metric.color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: metric.color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: metric.color,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(metric.label),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrendChartPainter extends CustomPainter {
+  const _TrendChartPainter({
+    required this.series,
+    required this.xAxisLabels,
+    required this.verticalMarkers,
+    required this.emptyMessage,
   });
 
-  final DateTime date;
-  final double? value;
+  final List<_ChartSeries> series;
+  final List<_AxisLabel> xAxisLabels;
+  final List<double> verticalMarkers;
+  final String? emptyMessage;
+
+  static const _leftPadding = 22.0;
+  static const _topPadding = 8.0;
+  static const _rightPadding = 10.0;
+  static const _bottomPadding = 28.0;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final chartRect = Rect.fromLTWH(
+      _leftPadding,
+      _topPadding,
+      size.width - _leftPadding - _rightPadding,
+      size.height - _topPadding - _bottomPadding,
+    );
+
+    final gridPaint = Paint()
+      ..color = const Color(0xFFD9DCE7)
+      ..strokeWidth = 1;
+    final axisTextStyle = const TextStyle(
+      color: Color(0xFF6D7488),
+      fontSize: 12,
+    );
+
+    for (var value = 1; value <= 5; value++) {
+      final y = _yForValue(chartRect, value.toDouble());
+      canvas.drawLine(
+        Offset(chartRect.left, y),
+        Offset(chartRect.right, y),
+        gridPaint,
+      );
+
+      _paintText(
+        canvas,
+        '$value',
+        Offset(0, y - 8),
+        axisTextStyle,
+      );
+    }
+
+    final monthMarkerPaint = Paint()
+      ..color = const Color(0xFFBFC6D8)
+      ..strokeWidth = 1;
+    for (final ratio in verticalMarkers) {
+      final x = _xForRatio(chartRect, ratio);
+      canvas.drawLine(
+        Offset(x, chartRect.top),
+        Offset(x, chartRect.bottom),
+        monthMarkerPaint,
+      );
+    }
+
+    for (final chartSeries in series) {
+      _paintSeries(canvas, chartRect, chartSeries);
+    }
+
+    _paintCenterTicks(canvas, chartRect);
+
+    for (final label in xAxisLabels) {
+      final x = _xForRatio(chartRect, label.positionRatio);
+      _paintText(
+        canvas,
+        label.text,
+        Offset(x - 14, chartRect.bottom + 8),
+        axisTextStyle,
+      );
+    }
+
+    if (emptyMessage != null) {
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: emptyMessage,
+          style: axisTextStyle.copyWith(fontSize: 13),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: chartRect.width - 24);
+      textPainter.paint(
+        canvas,
+        Offset(
+          chartRect.left + (chartRect.width - textPainter.width) / 2,
+          chartRect.top + (chartRect.height - textPainter.height) / 2,
+        ),
+      );
+    }
+  }
+
+  void _paintSeries(Canvas canvas, Rect chartRect, _ChartSeries series) {
+    final pointPaint = Paint()..color = series.color;
+    final linePaint = Paint()
+      ..color = series.color.withValues(alpha: 0.42)
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
+    Offset? previousPoint;
+    int? previousIndex;
+
+    for (var index = 0; index < series.values.length; index++) {
+      final value = series.values[index];
+      if (value == null) {
+        previousPoint = null;
+        previousIndex = null;
+        continue;
+      }
+
+      final point = Offset(
+        _xForRatio(chartRect, _ratioForIndex(index, series.values.length)),
+        _yForValue(chartRect, value),
+      );
+
+      if (previousPoint != null && previousIndex == index - 1) {
+        canvas.drawLine(previousPoint, point, linePaint);
+      }
+
+      canvas.drawCircle(point, 2.4, pointPaint);
+      previousPoint = point;
+      previousIndex = index;
+    }
+  }
+
+  void _paintCenterTicks(Canvas canvas, Rect chartRect) {
+    final tickPaint = Paint()
+      ..color = const Color(0xFF7C8294).withValues(alpha: 0.55)
+      ..strokeWidth = 1;
+    final centerY = _yForValue(chartRect, 3);
+
+    final totalSlots = series.isEmpty ? 0 : series.first.values.length;
+    for (var index = 0; index < totalSlots; index++) {
+      final x = _xForRatio(chartRect, _ratioForIndex(index, totalSlots));
+      canvas.drawLine(
+        Offset(x, centerY - 4),
+        Offset(x, centerY + 4),
+        tickPaint,
+      );
+    }
+  }
+
+  static double _xForRatio(Rect chartRect, double ratio) {
+    return chartRect.left + (chartRect.width * ratio);
+  }
+
+  static double _ratioForIndex(int index, int total) {
+    if (total <= 1) {
+      return 1;
+    }
+
+    return index / (total - 1);
+  }
+
+  static double _yForValue(Rect chartRect, double value) {
+    final normalized = (value - 1) / 4;
+    return chartRect.bottom - (chartRect.height * normalized);
+  }
+
+  void _paintText(
+    Canvas canvas,
+    String text,
+    Offset offset,
+    TextStyle style,
+  ) {
+    final textPainter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    textPainter.paint(canvas, offset);
+  }
+
+  @override
+  bool shouldRepaint(covariant _TrendChartPainter oldDelegate) {
+    return oldDelegate.series != series ||
+        oldDelegate.xAxisLabels != xAxisLabels ||
+        oldDelegate.verticalMarkers != verticalMarkers ||
+        oldDelegate.emptyMessage != emptyMessage;
+  }
+}
+
+_TrendChartData _buildChartData({
+  required List<DailyLogEntry> entries,
+  required _TrendMetric primaryMetric,
+  required _TrendMetric? comparisonMetric,
+  required _TrendPeriod period,
+  required int selectedYear,
+}) {
+  final slotDates = _buildSlotDates(period, selectedYear);
+  final series = <_ChartSeries>[
+    _ChartSeries(
+      metric: primaryMetric,
+      values: _buildSeriesValues(entries, primaryMetric.id.key, period, slotDates),
+      color: primaryMetric.color,
+    ),
+  ];
+
+  if (comparisonMetric != null) {
+    series.add(
+      _ChartSeries(
+        metric: comparisonMetric,
+        values: _buildSeriesValues(
+          entries,
+          comparisonMetric.id.key,
+          period,
+          slotDates,
+        ),
+        color: comparisonMetric.color,
+      ),
+    );
+  }
+
+  return _TrendChartData(
+    series: series,
+    xAxisLabels: _buildXAxisLabels(period, slotDates),
+    verticalMarkers: _buildVerticalMarkers(period, slotDates),
+    hasAnyData: series.any((series) => series.values.any((value) => value != null)),
+  );
+}
+
+List<DateTime> _buildSlotDates(_TrendPeriod period, int selectedYear) {
+  final today = _dateOnly(DateTime.now());
+  switch (period) {
+    case _TrendPeriod.sevenDays:
+      return [
+        for (var offset = 6; offset >= 0; offset--)
+          today.subtract(Duration(days: offset)),
+      ];
+    case _TrendPeriod.thirtyDays:
+      return [
+        for (var offset = 29; offset >= 0; offset--)
+          today.subtract(Duration(days: offset)),
+      ];
+    case _TrendPeriod.threeMonths:
+      final currentWeek = _startOfWeek(today);
+      return [
+        for (var offset = 12; offset >= 0; offset--)
+          currentWeek.subtract(Duration(days: offset * 7)),
+      ];
+    case _TrendPeriod.oneYear:
+      final start = DateTime(selectedYear, 1, 1);
+      final end = selectedYear == today.year ? today : DateTime(selectedYear, 12, 31);
+      final slots = <DateTime>[];
+      var cursor = start;
+      while (!cursor.isAfter(end)) {
+        slots.add(cursor);
+        cursor = cursor.add(const Duration(days: 14));
+      }
+      return slots;
+  }
+}
+
+List<double?> _buildSeriesValues(
+  List<DailyLogEntry> entries,
+  String metricKey,
+  _TrendPeriod period,
+  List<DateTime> slotDates,
+) {
+  switch (period) {
+    case _TrendPeriod.sevenDays:
+    case _TrendPeriod.thirtyDays:
+      final entryByDate = {
+        for (final entry in entries) _dateKey(entry.loggedAt): entry,
+      };
+      return [
+        for (final date in slotDates)
+          entryByDate[_dateKey(date)]?.responses[metricKey]?.toDouble(),
+      ];
+    case _TrendPeriod.threeMonths:
+      return [
+        for (final start in slotDates)
+          _averageForRange(
+            entries: entries,
+            metricKey: metricKey,
+            start: start,
+            end: start.add(const Duration(days: 6)),
+          ),
+      ];
+    case _TrendPeriod.oneYear:
+      return [
+        for (final start in slotDates)
+          _averageForRange(
+            entries: entries,
+            metricKey: metricKey,
+            start: start,
+            end: start.add(const Duration(days: 13)),
+          ),
+      ];
+  }
+}
+
+double? _averageForRange({
+  required List<DailyLogEntry> entries,
+  required String metricKey,
+  required DateTime start,
+  required DateTime end,
+}) {
+  var total = 0;
+  var count = 0;
+
+  for (final entry in entries) {
+    final loggedAt = _dateOnly(entry.loggedAt);
+    if (loggedAt.isBefore(start) || loggedAt.isAfter(end)) {
+      continue;
+    }
+
+    final value = entry.responses[metricKey];
+    if (value == null) {
+      continue;
+    }
+
+    total += value;
+    count += 1;
+  }
+
+  if (count == 0) {
+    return null;
+  }
+
+  return total / count;
+}
+
+List<double> _buildVerticalMarkers(_TrendPeriod period, List<DateTime> slotDates) {
+  if (slotDates.length < 2) {
+    return const [];
+  }
+
+  switch (period) {
+    case _TrendPeriod.sevenDays:
+    case _TrendPeriod.thirtyDays:
+      return const [];
+    case _TrendPeriod.threeMonths:
+      return _buildMonthMarkerRatios(
+        slotDates: slotDates,
+      );
+    case _TrendPeriod.oneYear:
+      return _buildMonthMarkerRatios(
+        slotDates: slotDates,
+      );
+  }
+}
+
+List<_AxisLabel> _buildXAxisLabels(_TrendPeriod period, List<DateTime> slotDates) {
+  if (slotDates.isEmpty) {
+    return const [];
+  }
+
+  switch (period) {
+    case _TrendPeriod.sevenDays:
+    case _TrendPeriod.thirtyDays:
+      return [
+        _AxisLabel(
+          text: _formatShortDate(slotDates.first),
+          positionRatio: 0,
+        ),
+        _AxisLabel(
+          text: _formatShortDate(slotDates.last),
+          positionRatio: 1,
+        ),
+      ];
+    case _TrendPeriod.threeMonths:
+      return _buildMonthLabels(
+        slotDates: slotDates,
+        monthStep: 1,
+      );
+    case _TrendPeriod.oneYear:
+      return _buildMonthLabels(
+        slotDates: slotDates,
+        monthStep: 3,
+      );
+  }
+}
+
+List<double> _buildMonthMarkerRatios({
+  required List<DateTime> slotDates,
+}) {
+  final start = slotDates.first;
+  final end = slotDates.last;
+  final markers = <double>[];
+
+  var cursor = DateTime(start.year, start.month, 1);
+  if (cursor.isBefore(start)) {
+    cursor = DateTime(start.year, start.month + 1, 1);
+  }
+
+  while (!cursor.isAfter(end)) {
+    final ratio = _ratioForDate(start, end, cursor);
+    if (ratio > 0 && ratio < 1) {
+      markers.add(ratio);
+    }
+    cursor = DateTime(cursor.year, cursor.month + 1, 1);
+  }
+
+  return markers;
+}
+
+List<_AxisLabel> _buildMonthLabels({
+  required List<DateTime> slotDates,
+  required int monthStep,
+}) {
+  final start = slotDates.first;
+  final end = slotDates.last;
+  final labels = <_AxisLabel>[];
+
+  var cursor = DateTime(start.year, start.month, 1);
+  if (cursor.isBefore(start)) {
+    cursor = DateTime(start.year, start.month + 1, 1);
+  }
+
+  var monthIndex = 0;
+  while (!cursor.isAfter(end)) {
+    if (monthIndex % monthStep == 0) {
+      labels.add(
+        _AxisLabel(
+          text: _monthName(cursor.month),
+          positionRatio: _ratioForDate(start, end, cursor),
+        ),
+      );
+    }
+    monthIndex += 1;
+    cursor = DateTime(cursor.year, cursor.month + 1, 1);
+  }
+
+  return labels;
+}
+
+double _ratioForDate(DateTime start, DateTime end, DateTime date) {
+  final totalDays = end.difference(start).inDays;
+  if (totalDays <= 0) {
+    return 0;
+  }
+
+  return date.difference(start).inDays / totalDays;
+}
+
+DateTime _dateOnly(DateTime dateTime) {
+  return DateTime(dateTime.year, dateTime.month, dateTime.day);
+}
+
+DateTime _startOfWeek(DateTime dateTime) {
+  final date = _dateOnly(dateTime);
+  return date.subtract(Duration(days: date.weekday - DateTime.monday));
+}
+
+String _dateKey(DateTime dateTime) {
+  final year = dateTime.year.toString().padLeft(4, '0');
+  final month = dateTime.month.toString().padLeft(2, '0');
+  final day = dateTime.day.toString().padLeft(2, '0');
+  return '$year-$month-$day';
+}
+
+String _formatShortDate(DateTime dateTime) {
+  return '${_monthName(dateTime.month)} ${dateTime.day}';
+}
+
+String _monthName(int month) {
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  return months[month - 1];
+}
+
+_TrendMetric _metricById(_TrendMetricId id) {
+  return _trendMetrics.firstWhere((metric) => metric.id == id);
+}
+
+enum _TrendPeriod {
+  sevenDays,
+  thirtyDays,
+  threeMonths,
+  oneYear,
+}
+
+enum _TrendMetricId {
+  mood('mood'),
+  motivation('motivation'),
+  fatigue('fatigue'),
+  hunger('hunger'),
+  sweetCraving('sweet_craving');
+
+  const _TrendMetricId(this.key);
+
+  final String key;
 }
 
 class _TrendMetric {
   const _TrendMetric({
-    required this.key,
+    required this.id,
     required this.label,
     required this.color,
   });
 
-  final String key;
+  final _TrendMetricId id;
   final String label;
   final Color color;
 }
 
-class _TrendSeries {
-  const _TrendSeries({
-    required this.points,
-    required this.startLabel,
-    required this.endLabel,
-    required this.loggedCount,
-    required this.showRangeLabels,
-    required this.monthMarkers,
+class _TrendChartData {
+  const _TrendChartData({
+    required this.series,
+    required this.xAxisLabels,
+    required this.verticalMarkers,
+    required this.hasAnyData,
   });
 
-  final List<_MetricPoint> points;
-  final String startLabel;
-  final String endLabel;
-  final int loggedCount;
-  final bool showRangeLabels;
-  final List<_MonthMarker> monthMarkers;
+  final List<_ChartSeries> series;
+  final List<_AxisLabel> xAxisLabels;
+  final List<double> verticalMarkers;
+  final bool hasAnyData;
 }
 
-class _MonthMarker {
-  const _MonthMarker({
-    required this.position,
-    required this.label,
-    required this.showLabel,
+class _ChartSeries {
+  const _ChartSeries({
+    required this.metric,
+    required this.values,
+    required this.color,
   });
 
-  final double position;
-  final String label;
-  final bool showLabel;
+  final _TrendMetric metric;
+  final List<double?> values;
+  final Color color;
 }
 
-enum _TrendRange {
-  sevenDays,
-  thirtyDays,
-  threeMonths,
-  thisYear,
+class _AxisLabel {
+  const _AxisLabel({
+    required this.text,
+    required this.positionRatio,
+  });
+
+  final String text;
+  final double positionRatio;
 }
 
 const _trendMetrics = <_TrendMetric>[
   _TrendMetric(
-    key: 'mood',
+    id: _TrendMetricId.mood,
     label: 'Mood',
-    color: Color(0xFF2E7D5B),
+    color: Color(0xFF3E8E69),
   ),
   _TrendMetric(
-    key: 'motivation',
+    id: _TrendMetricId.motivation,
     label: 'Motivation',
-    color: Color(0xFF2F6FDB),
+    color: Color(0xFF4D74C8),
   ),
   _TrendMetric(
-    key: 'fatigue',
+    id: _TrendMetricId.fatigue,
     label: 'Fatigue',
-    color: Color(0xFFC56A1A),
+    color: Color(0xFFB46943),
   ),
   _TrendMetric(
-    key: 'hunger',
+    id: _TrendMetricId.hunger,
     label: 'Hunger',
-    color: Color(0xFF8E5CC2),
+    color: Color(0xFF8B6BB8),
   ),
   _TrendMetric(
-    key: 'sweet_craving',
+    id: _TrendMetricId.sweetCraving,
     label: 'Sweet Craving',
-    color: Color(0xFFD14E7A),
+    color: Color(0xFFC4537A),
   ),
 ];
 
@@ -503,274 +971,6 @@ final _appetiteMetrics = <_TrendMetric>[
   _trendMetrics[4],
 ];
 
-_TrendSeries _buildTrendSeries({
-  required List<DailyLogEntry> entries,
-  required _TrendRange range,
-  required String metricKey,
-  required int selectedYear,
-}) {
-  switch (range) {
-    case _TrendRange.sevenDays:
-      return _buildDailySeries(
-        entries: entries,
-        days: 7,
-        metricKey: metricKey,
-      );
-    case _TrendRange.thirtyDays:
-      return _buildDailySeries(
-        entries: entries,
-        days: 30,
-        metricKey: metricKey,
-      );
-    case _TrendRange.threeMonths:
-      return _buildWeeklySeries(
-        entries: entries,
-        weeks: 13,
-        metricKey: metricKey,
-      );
-    case _TrendRange.thisYear:
-      return _buildThisYearSeries(
-        entries: entries,
-        metricKey: metricKey,
-        selectedYear: selectedYear,
-      );
-  }
-}
-
-_TrendSeries _buildDailySeries({
-  required List<DailyLogEntry> entries,
-  required int days,
-  required String metricKey,
-}) {
-  final today = _dateOnly(DateTime.now());
-  final start = today.subtract(Duration(days: days - 1));
-  final valuesByDate = <String, double>{};
-
-  for (final entry in entries) {
-    final entryDate = _dateOnly(entry.loggedAt);
-    if (entryDate.isBefore(start) || entryDate.isAfter(today)) {
-      continue;
-    }
-
-    final value = entry.responses[metricKey];
-    if (value != null) {
-      valuesByDate[_dateKey(entryDate)] = value.toDouble();
-    }
-  }
-
-  final points = List.generate(days, (index) {
-    final date = start.add(Duration(days: index));
-    return _MetricPoint(
-      date: date,
-      value: valuesByDate[_dateKey(date)],
-    );
-  });
-
-  return _TrendSeries(
-    points: points,
-    startLabel: _formatShortDate(points.first.date),
-    endLabel: _formatShortDate(points.last.date),
-    loggedCount: valuesByDate.length,
-    showRangeLabels: true,
-    monthMarkers: const [],
-  );
-}
-
-_TrendSeries _buildWeeklySeries({
-  required List<DailyLogEntry> entries,
-  required int weeks,
-  required String metricKey,
-}) {
-  final currentWeekStart = _startOfWeek(_dateOnly(DateTime.now()));
-  final startWeek = currentWeekStart.subtract(Duration(days: (weeks - 1) * 7));
-  final bucketValues = <String, List<int>>{};
-
-  for (final entry in entries) {
-    final entryDate = _dateOnly(entry.loggedAt);
-    final weekStart = _startOfWeek(entryDate);
-    if (weekStart.isBefore(startWeek) || weekStart.isAfter(currentWeekStart)) {
-      continue;
-    }
-
-    final value = entry.responses[metricKey];
-    if (value != null) {
-      bucketValues.putIfAbsent(_dateKey(weekStart), () => []).add(value);
-    }
-  }
-
-  final points = List.generate(weeks, (index) {
-    final weekStart = startWeek.add(Duration(days: index * 7));
-    final values = bucketValues[_dateKey(weekStart)];
-    final average = values == null || values.isEmpty
-        ? null
-        : values.reduce((sum, value) => sum + value) / values.length;
-
-    return _MetricPoint(
-      date: weekStart,
-      value: average,
-    );
-  });
-
-  final monthMarkers = _buildMonthMarkers(
-    startDate: points.first.date,
-    endDate: points.last.date,
-    labelEveryMonths: 1,
-  );
-
-  return _TrendSeries(
-    points: points,
-    startLabel: _formatShortDate(points.first.date),
-    endLabel: _formatShortDate(points.last.date),
-    loggedCount: points.where((point) => point.value != null).length,
-    showRangeLabels: false,
-    monthMarkers: monthMarkers,
-  );
-}
-
-_TrendSeries _buildThisYearSeries({
-  required List<DailyLogEntry> entries,
-  required String metricKey,
-  required int selectedYear,
-}) {
-  final today = _dateOnly(DateTime.now());
-  final isCurrentYear = selectedYear == today.year;
-  final periodEnd = isCurrentYear ? today : DateTime(selectedYear, 12, 31);
-  final yearStart = DateTime(selectedYear, 1, 1);
-  final bucketValues = <String, List<int>>{};
-
-  for (final entry in entries) {
-    final entryDate = _dateOnly(entry.loggedAt);
-    if (entryDate.isBefore(yearStart) || entryDate.isAfter(periodEnd)) {
-      continue;
-    }
-
-    final value = entry.responses[metricKey];
-    if (value != null) {
-      final periodStart = _startOfTwoWeekPeriod(entryDate, yearStart);
-      bucketValues.putIfAbsent(_dateKey(periodStart), () => []).add(value);
-    }
-  }
-
-  final points = <_MetricPoint>[];
-  var cursor = yearStart;
-  while (!cursor.isAfter(periodEnd)) {
-    final values = bucketValues[_dateKey(cursor)];
-    final average = values == null || values.isEmpty
-        ? null
-        : values.reduce((sum, value) => sum + value) / values.length;
-    points.add(_MetricPoint(date: cursor, value: average));
-    cursor = cursor.add(const Duration(days: 14));
-  }
-
-  final monthMarkers = _buildMonthMarkers(
-    startDate: points.first.date,
-    endDate: points.last.date,
-    labelEveryMonths: 3,
-  );
-
-  return _TrendSeries(
-    points: points,
-    startLabel: _formatShortDate(points.first.date),
-    endLabel: _formatShortDate(points.last.date),
-    loggedCount: points.where((point) => point.value != null).length,
-    showRangeLabels: false,
-    monthMarkers: monthMarkers,
-  );
-}
-
-List<int> _availableYears(List<DailyLogEntry> entries) {
-  final years = entries.map((entry) => entry.loggedAt.year).toSet().toList()
-    ..sort((a, b) => b.compareTo(a));
-  return years;
-}
-
-DateTime _dateOnly(DateTime dateTime) {
-  return DateTime(dateTime.year, dateTime.month, dateTime.day);
-}
-
-DateTime _startOfWeek(DateTime dateTime) {
-  return dateTime.subtract(Duration(days: dateTime.weekday - DateTime.monday));
-}
-
-String _dateKey(DateTime dateTime) {
-  final year = dateTime.year.toString().padLeft(4, '0');
-  final month = dateTime.month.toString().padLeft(2, '0');
-  final day = dateTime.day.toString().padLeft(2, '0');
-  return '$year-$month-$day';
-}
-
-String _formatShortDate(DateTime dateTime) {
-  const months = <String>[
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-
-  return '${months[dateTime.month - 1]} ${dateTime.day}';
-}
-
-List<_MonthMarker> _buildMonthMarkers({
-  required DateTime startDate,
-  required DateTime endDate,
-  required int labelEveryMonths,
-}) {
-  final markers = <_MonthMarker>[];
-  final totalDays = endDate.difference(startDate).inDays.toDouble();
-  if (totalDays <= 0) {
-    return markers;
-  }
-
-  var current = DateTime(startDate.year, startDate.month, 1);
-  if (current.isBefore(startDate)) {
-    current = DateTime(startDate.year, startDate.month + 1, 1);
-  }
-
-  while (!current.isAfter(endDate)) {
-    final offsetDays = current.difference(startDate).inDays.toDouble();
-    final position = (offsetDays / totalDays).clamp(0.0, 1.0);
-    markers.add(
-      _MonthMarker(
-        position: position,
-        label: _formatMonthLabel(current),
-        showLabel: ((current.month - 1) % labelEveryMonths) == 0,
-      ),
-    );
-    current = DateTime(current.year, current.month + 1, 1);
-  }
-
-  return markers;
-}
-
-DateTime _startOfTwoWeekPeriod(DateTime dateTime, DateTime anchorDate) {
-  final offsetDays = dateTime.difference(anchorDate).inDays;
-  final periodIndex = offsetDays ~/ 14;
-  return anchorDate.add(Duration(days: periodIndex * 14));
-}
-
-String _formatMonthLabel(DateTime dateTime) {
-  const months = <String>[
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-
-  return months[dateTime.month - 1];
+extension<T> on List<T> {
+  T? get lastOrNull => isEmpty ? null : last;
 }
