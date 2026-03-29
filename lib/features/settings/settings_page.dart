@@ -17,10 +17,17 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   final _wearableRepository = LocalWearableRepository();
   final _fitbitClient = FitbitApiClient();
+  WearableConnection? _fitbitConnection;
   bool _isSavingSample = false;
   String? _sampleSaveResult;
   bool _isSyncingFitbit = false;
   String? _fitbitSyncResult;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFitbitConnection();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -94,6 +101,18 @@ class _SettingsPageState extends State<SettingsPage> {
                     'Sync today\'s Fitbit wearable metrics once.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Status: ${_fitbitConnection?.isConnected == true ? 'Connected' : 'Not connected'}',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  if (_fitbitConnection?.lastSyncedAt case final lastSyncedAt?) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Last synced: ${_formatDateTime(lastSyncedAt)}',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   FilledButton(
                     onPressed: _isSyncingFitbit ? null : _syncFitbitData,
@@ -180,11 +199,15 @@ class _SettingsPageState extends State<SettingsPage> {
           lastSyncedAt: now,
         ),
       );
+      final updatedConnection = await _wearableRepository.loadConnection(
+        WearableProvider.fitbit,
+      );
       if (!mounted) {
         return;
       }
 
       setState(() {
+        _fitbitConnection = updatedConnection;
         _isSyncingFitbit = false;
         _fitbitSyncResult = 'Fitbit data synced';
       });
@@ -208,8 +231,52 @@ class _SettingsPageState extends State<SettingsPage> {
       });
     }
   }
+
+  Future<void> _loadFitbitConnection() async {
+    final connection = await _wearableRepository.loadConnection(
+      WearableProvider.fitbit,
+    );
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _fitbitConnection = connection;
+    });
+  }
 }
 
 DateTime _dateOnly(DateTime dateTime) {
   return DateTime(dateTime.year, dateTime.month, dateTime.day);
+}
+
+String _formatDateTime(DateTime dateTime) {
+  const months = <String>[
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  final month = months[dateTime.month - 1];
+  final day = dateTime.day;
+  final year = dateTime.year;
+  final hour24 = dateTime.hour;
+  final minute = dateTime.minute.toString().padLeft(2, '0');
+  final period = hour24 >= 12 ? 'PM' : 'AM';
+  final hour12 = hour24 == 0
+      ? 12
+      : hour24 > 12
+          ? hour24 - 12
+          : hour24;
+
+  return '$month $day, $year $hour12:$minute $period';
 }
