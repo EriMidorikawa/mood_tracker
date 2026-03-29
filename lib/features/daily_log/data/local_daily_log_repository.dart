@@ -26,6 +26,11 @@ class LocalDailyLogRepository {
     return entry;
   }
 
+  Future<DailyLogEntry?> loadEntryByDate(DateTime logDate) async {
+    final entries = await loadEntries();
+    return entries[_dateKey(logDate)];
+  }
+
   Future<Map<String, DailyLogEntry>> loadEntries() async {
     final preferences = await SharedPreferences.getInstance();
     final rawEntries = preferences.getString(_entriesByDateKey);
@@ -43,6 +48,8 @@ class LocalDailyLogRepository {
   Future<void> saveEntry(DailyLogEntry entry) async {
     final preferences = await SharedPreferences.getInstance();
     final entries = await loadEntries();
+
+    // MVP rule: one saved entry per log date. Saving the same date overwrites it.
     entries[_dateKey(entry.loggedAt)] = entry;
 
     final encodedEntries = <String, dynamic>{
