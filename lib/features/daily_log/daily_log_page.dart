@@ -77,7 +77,10 @@ class _DailyLogPageState extends State<DailyLogPage> {
     FocusScope.of(context).unfocus();
     final entry = DailyLogEntry(
       loggedAt: _selectedLogDate,
-      responses: Map.unmodifiable(_responses),
+      responses: Map.unmodifiable({
+        for (final question in dailyLogQuestions)
+          question.id: _responses[question.id] ?? 3,
+      }),
       note: _memoController.text.trim(),
     );
 
@@ -174,7 +177,7 @@ class _DailyLogPageState extends State<DailyLogPage> {
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           children: [
             Text(
-              'Check in with how you feel today.',
+              'Log the five core signals you want to track over time.',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 12),
@@ -215,7 +218,7 @@ class _DailyLogPageState extends State<DailyLogPage> {
                       maxLines: 6,
                       decoration: const InputDecoration(
                         hintText:
-                            'Optional notes about meals, cravings, or mood.',
+                            'Optional notes about today, meals, or mood.',
                         border: OutlineInputBorder(),
                       ),
                     ),

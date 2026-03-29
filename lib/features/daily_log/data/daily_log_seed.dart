@@ -26,32 +26,8 @@ const dailyLogQuestions = <DailyLogQuestion>[
     highLabel: 'Very hungry',
   ),
   DailyLogQuestion(
-    id: 'craving',
-    label: 'General craving',
-    lowLabel: 'None',
-    highLabel: 'Very strong',
-  ),
-  DailyLogQuestion(
-    id: 'salty_craving',
-    label: 'Salty craving',
-    lowLabel: 'None',
-    highLabel: 'Very strong',
-  ),
-  DailyLogQuestion(
-    id: 'post_meal_satisfaction',
-    label: 'Post-meal satisfaction',
-    lowLabel: 'Not satisfied',
-    highLabel: 'Very satisfied',
-  ),
-  DailyLogQuestion(
     id: 'sweet_craving',
-    label: 'Sweet craving',
-    lowLabel: 'None',
-    highLabel: 'Very strong',
-  ),
-  DailyLogQuestion(
-    id: 'overeating_feeling',
-    label: 'Overeating feeling',
+    label: 'Sweet Craving',
     lowLabel: 'None',
     highLabel: 'Very strong',
   ),
