@@ -483,7 +483,7 @@ class _TrendChartPainter extends CustomPainter {
     final pointPaint = Paint()..color = series.color;
     final linePaint = Paint()
       ..color = series.color.withValues(alpha: 0.42)
-      ..strokeWidth = 2
+      ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke;
 
     Offset? previousPoint;
