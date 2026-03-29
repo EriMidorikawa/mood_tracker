@@ -11,7 +11,7 @@ class HomePage extends StatelessWidget {
   });
 
   final VoidCallback onOpenTodayLog;
-  final VoidCallback onOpenSettings;
+  final Future<void> Function() onOpenSettings;
   final DailyLogEntry? todayEntry;
 
   @override
@@ -21,7 +21,9 @@ class HomePage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Home'),
-        actions: const [SettingsMenuButton()],
+        actions: [
+          SettingsMenuButton(onSettingsClosed: onOpenSettings),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -79,7 +81,9 @@ class HomePage extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   OutlinedButton(
-                    onPressed: onOpenSettings,
+                    onPressed: () {
+                      onOpenSettings();
+                    },
                     child: const Text('Open Settings'),
                   ),
                 ],

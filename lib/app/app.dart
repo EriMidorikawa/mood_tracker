@@ -93,6 +93,11 @@ class _AppShellState extends State<AppShell> {
     });
   }
 
+  Future<void> _openSettingsAndRefresh(BuildContext context) async {
+    await openSettingsPage(context);
+    await _loadData();
+  }
+
   Future<void> _handleSave(DailyLogEntry entry) async {
     await _repository.saveEntry(entry);
     final entries = await _repository.loadEntriesSorted();
@@ -179,17 +184,19 @@ class _AppShellState extends State<AppShell> {
       HomePage(
         todayEntry: todayEntry,
         onOpenTodayLog: () => _openTodayLog(context),
-        onOpenSettings: () => openSettingsPage(context),
+        onOpenSettings: () => _openSettingsAndRefresh(context),
       ),
       TrendsPage(
         entries: _entries,
         wearableMetrics: _wearableMetrics,
+        onSettingsClosed: () => _loadData(),
       ),
       HistoryPage(
         entries: _entries,
         wearableMetrics: _wearableMetrics,
         loadEntryByDate: _repository.loadEntryByDate,
         onSaveEntry: _saveEntryFromHistory,
+        onSettingsClosed: () => _loadData(),
       ),
     ];
 

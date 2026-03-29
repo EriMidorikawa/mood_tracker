@@ -10,10 +10,12 @@ class TrendsPage extends StatefulWidget {
     super.key,
     required this.entries,
     required this.wearableMetrics,
+    required this.onSettingsClosed,
   });
 
   final List<DailyLogEntry> entries;
   final List<DailyWearableMetric> wearableMetrics;
+  final Future<void> Function() onSettingsClosed;
 
   @override
   State<TrendsPage> createState() => _TrendsPageState();
@@ -88,7 +90,9 @@ class _TrendsPageState extends State<TrendsPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Trends'),
-        actions: const [SettingsMenuButton()],
+        actions: [
+          SettingsMenuButton(onSettingsClosed: widget.onSettingsClosed),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),

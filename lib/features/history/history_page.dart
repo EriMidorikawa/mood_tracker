@@ -12,12 +12,14 @@ class HistoryPage extends StatefulWidget {
     required this.wearableMetrics,
     required this.loadEntryByDate,
     required this.onSaveEntry,
+    required this.onSettingsClosed,
   });
 
   final List<DailyLogEntry> entries;
   final List<DailyWearableMetric> wearableMetrics;
   final Future<DailyLogEntry?> Function(DateTime) loadEntryByDate;
   final Future<void> Function(DailyLogEntry) onSaveEntry;
+  final Future<void> Function() onSettingsClosed;
 
   @override
   State<HistoryPage> createState() => _HistoryPageState();
@@ -38,6 +40,7 @@ class _HistoryPageState extends State<HistoryPage> {
     final today = _dateOnly(DateTime.now());
     final loggedDates = {
       for (final entry in widget.entries) _dateKey(entry.loggedAt),
+      for (final metric in widget.wearableMetrics) _dateKey(metric.date),
     };
     final days = _buildMonthCells(_visibleMonth);
     final canGoNext = !_isSameMonth(_visibleMonth, today);
@@ -45,7 +48,9 @@ class _HistoryPageState extends State<HistoryPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('History'),
-        actions: const [SettingsMenuButton()],
+        actions: [
+          SettingsMenuButton(onSettingsClosed: widget.onSettingsClosed),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -110,7 +115,7 @@ class _HistoryPageState extends State<HistoryPage> {
               );
             },
           ),
-          if (widget.entries.isEmpty) ...[
+          if (widget.entries.isEmpty && widget.wearableMetrics.isEmpty) ...[
             const SizedBox(height: 16),
             Text(
               'No logs yet. You can start by tapping any past or current day.',
