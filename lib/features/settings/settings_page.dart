@@ -7,7 +7,6 @@ import 'package:mood_tracker/features/wearables/data/fitbit_oauth_token_store.da
 import 'package:mood_tracker/features/wearables/data/fitbit_source_adapter.dart';
 import 'package:mood_tracker/features/wearables/data/local_wearable_repository.dart';
 import 'package:mood_tracker/features/wearables/models/daily_wearable_metric.dart';
-import 'package:mood_tracker/features/wearables/models/fitbit_callback_debug.dart';
 import 'package:mood_tracker/features/wearables/models/fitbit_oauth_token.dart';
 import 'package:mood_tracker/features/wearables/models/fitbit_oauth_preparation.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_connection.dart';
@@ -66,7 +65,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Preferences and integrations will be managed here.',
+            'Manage your mood tracking preferences and Fitbit connection.',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyLarge,
           ),
@@ -88,9 +87,34 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Status: $_fitbitStatusLabel',
-                    style: Theme.of(context).textTheme.bodyMedium,
+                    _fitbitStatusLabel,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                   ),
+                  if (_hasFitbitConnection) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.check_circle,
+                          size: 16,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Fitbit is connected',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      'Connect Fitbit to import sleep and resting heart rate data.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
                   const SizedBox(height: 4),
                   Text(
                     _fitbitConnection?.lastSyncedAt != null
@@ -109,50 +133,14 @@ class _SettingsPageState extends State<SettingsPage> {
                           : _fitbitPrimaryActionLabel,
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  ValueListenableBuilder<FitbitCallbackDebug?>(
-                    valueListenable: fitbitCallbackDebugStore.lastCallback,
-                    builder: (context, callback, _) {
-                      if (callback == null) {
-                        return Text(
-                          'Last Fitbit callback URI: Not received yet',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        );
-                      }
-
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Last Fitbit callback URI: ${callback.uri}',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                          if (callback.code != null) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              'code: ${callback.code}',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                          if (callback.state != null) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              'state: ${callback.state}',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                          if (callback.stateMatched != null) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              'Last callback state matched: ${callback.stateMatched}',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ],
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 12),
+                  if (!_hasFitbitConnection) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'After tapping Connect Fitbit, we will open Fitbit in your browser to finish authorization.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                  const SizedBox(height: 16),
                   OutlinedButton(
                     onPressed: _isBackfillingFitbit ? null : _backfillFitbitData,
                     child: Text(
@@ -160,6 +148,11 @@ class _SettingsPageState extends State<SettingsPage> {
                           ? 'Backfilling Fitbit data...'
                           : 'Backfill last 30 days',
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Import recent Fitbit history for the last 30 days.',
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                   if (_isBackfillingFitbit) ...[
                     const SizedBox(height: 8),
@@ -483,6 +476,31 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
 
+    final shouldDisconnect = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Disconnect Fitbit?'),
+          content: const Text(
+            'You can reconnect later from Settings. Your previously synced data will stay in the app.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Disconnect'),
+            ),
+          ],
+        );
+      },
+    );
+    if (shouldDisconnect != true) {
+      return;
+    }
+
     await _wearableRepository.upsertConnection(
       WearableConnection(
         provider: WearableProvider.fitbit,
@@ -502,7 +520,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
     setState(() {
       _fitbitConnection = updatedConnection;
-      _fitbitSyncResult = 'Fitbit disconnected locally';
+      _fitbitSyncResult = 'Fitbit has been disconnected from this app.';
     });
   }
 
