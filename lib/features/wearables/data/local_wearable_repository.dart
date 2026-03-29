@@ -157,8 +157,34 @@ class LocalWearableRepository {
       ]),
     );
   }
+
+  Future<void> upsertDailyMetrics(List<DailyWearableMetric> metrics) async {
+    final existingMetrics = await loadDailyMetrics();
+    final nextMetrics = [
+      for (final existing in existingMetrics)
+        if (!_containsSameDailyMetric(metrics, existing)) existing,
+      ...metrics,
+    ];
+
+    await saveDailyMetrics(nextMetrics);
+  }
 }
 
 DateTime _dateOnly(DateTime dateTime) {
   return DateTime(dateTime.year, dateTime.month, dateTime.day);
+}
+
+bool _containsSameDailyMetric(
+  List<DailyWearableMetric> metrics,
+  DailyWearableMetric candidate,
+) {
+  for (final metric in metrics) {
+    if (metric.provider == candidate.provider &&
+        metric.metricType == candidate.metricType &&
+        _dateOnly(metric.date) == _dateOnly(candidate.date)) {
+      return true;
+    }
+  }
+
+  return false;
 }
