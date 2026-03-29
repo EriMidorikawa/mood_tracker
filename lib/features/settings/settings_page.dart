@@ -8,6 +8,7 @@ import 'package:mood_tracker/features/wearables/data/fitbit_source_adapter.dart'
 import 'package:mood_tracker/features/wearables/data/local_wearable_repository.dart';
 import 'package:mood_tracker/features/wearables/models/daily_wearable_metric.dart';
 import 'package:mood_tracker/features/wearables/models/fitbit_callback_debug.dart';
+import 'package:mood_tracker/features/wearables/models/fitbit_oauth_token.dart';
 import 'package:mood_tracker/features/wearables/models/fitbit_oauth_preparation.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_connection.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_metric_type.dart';
@@ -209,7 +210,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Status: ${_fitbitConnection?.isConnected == true ? 'Connected' : 'Not connected'}',
+                    'Status: $_fitbitStatusLabel',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 4),
@@ -309,10 +310,11 @@ class _SettingsPageState extends State<SettingsPage> {
     });
 
     try {
-      final token = await _fitbitTokenStore.loadToken();
-      if (token == null || token.isExpired) {
-        throw const FitbitApiException('Authorize Fitbit first.');
-      }
+      final token = await _requireValidFitbitToken(
+        expiredMessage: 'Fitbit session expired. Please authorize again.',
+        missingMessage: 'Fitbit authorization required',
+        failureMessage: 'Could not sync Fitbit data. Please authorize again.',
+      );
 
       final today = _dateOnly(DateTime.now());
       final now = DateTime.now();
@@ -378,10 +380,11 @@ class _SettingsPageState extends State<SettingsPage> {
     var importedDays = 0;
     var failedDays = 0;
     try {
-      final token = await _fitbitTokenStore.loadToken();
-      if (token == null || token.isExpired) {
-        throw const FitbitApiException('Authorize Fitbit first.');
-      }
+      final token = await _requireValidFitbitToken(
+        expiredMessage: 'Fitbit session expired. Please authorize again.',
+        missingMessage: 'Fitbit authorization required',
+        failureMessage: 'Could not sync Fitbit data. Please authorize again.',
+      );
 
       final today = _dateOnly(DateTime.now());
       final startDate = today.subtract(
@@ -505,6 +508,53 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() {
       _fitbitConnection = connection;
     });
+  }
+
+  String get _fitbitStatusLabel {
+    if (_fitbitConnection?.isConnected != true) {
+      return 'Not connected';
+    }
+
+    return 'Connected';
+  }
+
+  Future<FitbitOAuthToken> _requireValidFitbitToken({
+    required String missingMessage,
+    required String expiredMessage,
+    required String failureMessage,
+  }) async {
+    final token = await _fitbitTokenStore.loadToken();
+    if (token == null) {
+      throw FitbitApiException(missingMessage);
+    }
+
+    if (!token.isExpired) {
+      return token;
+    }
+
+    final existingConnection = await _wearableRepository.loadConnection(
+      WearableProvider.fitbit,
+    );
+    await _wearableRepository.upsertConnection(
+      WearableConnection(
+        provider: WearableProvider.fitbit,
+        isConnected: false,
+        accountLabel: existingConnection?.accountLabel,
+        connectedAt: existingConnection?.connectedAt,
+        lastSyncedAt: null,
+      ),
+    );
+    final updatedConnection = await _wearableRepository.loadConnection(
+      WearableProvider.fitbit,
+    );
+    if (mounted) {
+      setState(() {
+        _fitbitConnection = updatedConnection;
+        _fitbitSyncResult = failureMessage;
+      });
+    }
+
+    throw FitbitApiException(expiredMessage);
   }
 
   Future<void> _disconnectFitbit() async {
