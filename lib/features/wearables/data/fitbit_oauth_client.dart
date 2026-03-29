@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:mood_tracker/features/wearables/config/fitbit_config.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_oauth_session_store.dart';
 import 'package:mood_tracker/features/wearables/models/fitbit_oauth_token.dart';
 
@@ -8,9 +9,8 @@ class FitbitOAuthClient {
   FitbitOAuthClient({
     String? clientId,
     String? clientSecret,
-  })  : _clientId = clientId ?? const String.fromEnvironment('FITBIT_CLIENT_ID'),
-        _clientSecret =
-            clientSecret ?? const String.fromEnvironment('FITBIT_CLIENT_SECRET');
+  })  : _clientId = clientId ?? FitbitConfig.clientId,
+        _clientSecret = clientSecret ?? FitbitConfig.clientSecret;
 
   final String _clientId;
   final String _clientSecret;

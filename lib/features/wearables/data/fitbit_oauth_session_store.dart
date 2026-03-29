@@ -3,13 +3,14 @@ import 'dart:math';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'package:mood_tracker/features/wearables/config/fitbit_config.dart';
 import 'package:mood_tracker/features/wearables/models/fitbit_oauth_preparation.dart';
 
 class FitbitOAuthSessionStore {
   FitbitOAuthSessionStore({
     String? clientId,
     List<String>? scopes,
-  })  : _clientId = clientId ?? const String.fromEnvironment('FITBIT_CLIENT_ID'),
+  })  : _clientId = clientId ?? FitbitConfig.clientId,
         _scopes = scopes ?? const ['sleep', 'heartrate'];
 
   static const redirectUri = 'moodtracker://fitbit-callback';

@@ -23,7 +23,7 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  static const _fitbitBackfillDays = 30;
+  static const _backfillOptions = <int>[30, 90];
 
   final _dailyLogRepository = LocalDailyLogRepository();
   final _wearableRepository = LocalWearableRepository();
@@ -32,8 +32,9 @@ class _SettingsPageState extends State<SettingsPage> {
   WearableConnection? _fitbitConnection;
   bool _isSyncingFitbit = false;
   bool _isBackfillingFitbit = false;
+  int _selectedFitbitBackfillDays = 90;
   int _fitbitBackfillProgress = 0;
-  int _fitbitBackfillTarget = _fitbitBackfillDays;
+  int _fitbitBackfillTarget = 90;
   bool _isHandlingFitbitCallback = false;
   String? _fitbitSyncResult;
   String? _lastHandledCallbackUri;
@@ -143,17 +144,37 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ],
                   const SizedBox(height: 16),
+                  SegmentedButton<int>(
+                    segments: _backfillOptions
+                        .map(
+                          (days) => ButtonSegment<int>(
+                            value: days,
+                            label: Text('Last $days days'),
+                          ),
+                        )
+                        .toList(),
+                    selected: {_selectedFitbitBackfillDays},
+                    onSelectionChanged: _isBackfillingFitbit
+                        ? null
+                        : (selection) {
+                            setState(() {
+                              _selectedFitbitBackfillDays = selection.first;
+                              _fitbitBackfillTarget = _selectedFitbitBackfillDays;
+                            });
+                          },
+                  ),
+                  const SizedBox(height: 12),
                   OutlinedButton(
                     onPressed: _isBackfillingFitbit ? null : _backfillFitbitData,
                     child: Text(
                       _isBackfillingFitbit
                           ? 'Backfilling Fitbit data...'
-                          : 'Backfill last 30 days',
+                          : 'Backfill last $_selectedFitbitBackfillDays days',
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Import recent Fitbit history for the last 30 days.',
+                    'Import recent Fitbit history for the last $_selectedFitbitBackfillDays days.',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   if (_isBackfillingFitbit) ...[
@@ -266,8 +287,9 @@ class _SettingsPageState extends State<SettingsPage> {
       _fitbitConnection = null;
       _isSyncingFitbit = false;
       _isBackfillingFitbit = false;
+      _selectedFitbitBackfillDays = 90;
       _fitbitBackfillProgress = 0;
-      _fitbitBackfillTarget = _fitbitBackfillDays;
+      _fitbitBackfillTarget = _selectedFitbitBackfillDays;
       _isHandlingFitbitCallback = false;
       _fitbitSyncResult = 'Local app data has been reset.';
     });
@@ -343,7 +365,7 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() {
       _isBackfillingFitbit = true;
       _fitbitBackfillProgress = 0;
-      _fitbitBackfillTarget = _fitbitBackfillDays;
+      _fitbitBackfillTarget = _selectedFitbitBackfillDays;
       _fitbitSyncResult = 'Backfilling Fitbit data...';
     });
 
@@ -358,7 +380,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
       final today = _dateOnly(DateTime.now());
       final startDate = today.subtract(
-        const Duration(days: _fitbitBackfillDays - 1),
+        Duration(days: _selectedFitbitBackfillDays - 1),
       );
       final existingMetrics = await _wearableRepository.loadDailyMetricsInRange(
         startDate: startDate,
@@ -370,13 +392,15 @@ class _SettingsPageState extends State<SettingsPage> {
         startDate: startDate,
         endDate: today,
       );
+      final skippedDays = _selectedFitbitBackfillDays - missingDates.length;
 
       if (missingDates.isEmpty) {
         setState(() {
           _isBackfillingFitbit = false;
           _fitbitBackfillProgress = 0;
           _fitbitBackfillTarget = 0;
-          _fitbitSyncResult = 'Last $_fitbitBackfillDays days already imported';
+          _fitbitSyncResult = 'No new Fitbit data was needed. Skipped '
+              '$skippedDays already imported days.';
         });
         return;
       }
@@ -432,8 +456,8 @@ class _SettingsPageState extends State<SettingsPage> {
         _fitbitBackfillProgress = importedDays + failedDays;
         _fitbitBackfillTarget = missingDates.length;
         _fitbitSyncResult = failedDays == 0
-            ? 'Imported ${missingDates.length} days of Fitbit data'
-            : 'Imported $importedDays of ${missingDates.length} days. Some days could not be synced.';
+            ? 'Imported $importedDays new days. Skipped $skippedDays already imported days.'
+            : 'Imported $importedDays new days. Skipped $skippedDays already imported days. Some days could not be synced.';
       });
     } on FitbitApiException catch (error) {
       if (!mounted) {
@@ -444,7 +468,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _isBackfillingFitbit = false;
         _fitbitBackfillProgress = importedDays;
         _fitbitBackfillTarget = _fitbitBackfillTarget == 0
-            ? _fitbitBackfillDays
+            ? _selectedFitbitBackfillDays
             : _fitbitBackfillTarget;
         _fitbitSyncResult = importedDays == 0
             ? error.message
@@ -459,7 +483,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _isBackfillingFitbit = false;
         _fitbitBackfillProgress = importedDays;
         _fitbitBackfillTarget = _fitbitBackfillTarget == 0
-            ? _fitbitBackfillDays
+            ? _selectedFitbitBackfillDays
             : _fitbitBackfillTarget;
         _fitbitSyncResult =
             'No Fitbit data was imported. Some days could not be synced.';
