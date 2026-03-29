@@ -355,6 +355,16 @@ const _trendMetrics = <_TrendMetric>[
     label: 'Fatigue',
     color: Color(0xFFC56A1A),
   ),
+  _TrendMetric(
+    key: 'hunger',
+    label: 'Hunger',
+    color: Color(0xFF8E5CC2),
+  ),
+  _TrendMetric(
+    key: 'sweet_craving',
+    label: 'Sweet craving',
+    color: Color(0xFFD14E7A),
+  ),
 ];
 
 List<_MetricPoint> _buildMetricPoints({
