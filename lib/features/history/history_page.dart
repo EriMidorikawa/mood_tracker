@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:mood_tracker/app/settings_menu_button.dart';
+import 'package:mood_tracker/features/daily_log/daily_log_page.dart';
 import 'package:mood_tracker/features/daily_log/models/daily_log_entry.dart';
 
 class HistoryPage extends StatelessWidget {
   const HistoryPage({
     super.key,
     required this.entries,
-    required this.onOpenEntry,
+    required this.loadEntryByDate,
+    required this.onSaveEntry,
   });
 
   final List<DailyLogEntry> entries;
-  final ValueChanged<DateTime> onOpenEntry;
+  final Future<DailyLogEntry?> Function(DateTime) loadEntryByDate;
+  final Future<void> Function(DailyLogEntry) onSaveEntry;
 
   @override
   Widget build(BuildContext context) {
@@ -61,11 +64,30 @@ class HistoryPage extends StatelessWidget {
                       ),
                     ),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () => onOpenEntry(entry.loggedAt),
+                    onTap: () => _openEditor(context, entry.loggedAt),
                   ),
                 );
               },
             ),
+    );
+  }
+
+  Future<void> _openEditor(BuildContext context, DateTime logDate) async {
+    final entry = await loadEntryByDate(logDate);
+    if (!context.mounted || entry == null) {
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => DailyLogPage(
+          initialEntry: entry,
+          onSave: onSaveEntry,
+          popOnSave: true,
+          showSettingsMenu: false,
+          title: 'Edit Log',
+        ),
+      ),
     );
   }
 }

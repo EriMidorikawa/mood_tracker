@@ -110,15 +110,27 @@ class _AppShellState extends State<AppShell> {
     });
   }
 
-  Future<void> _openEntryForDate(DateTime logDate) async {
-    final entry = await _repository.loadEntryByDate(logDate);
-    if (!mounted || entry == null) {
+  Future<void> _saveEntryFromHistory(DailyLogEntry entry) async {
+    await _repository.saveEntry(entry);
+    final latestEntry = await _repository.loadLatestEntry();
+    final entries = await _repository.loadEntriesSorted();
+    if (!mounted) {
       return;
     }
 
     setState(() {
-      _activeEntry = entry;
-      _selectedIndex = 1;
+      _latestEntry = latestEntry;
+      _activeEntry = latestEntry;
+      _entries = entries;
+      _selectedIndex = 3;
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scaffoldMessengerKey.currentState
+        ?..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('History log updated.')),
+        );
     });
   }
 
@@ -142,7 +154,8 @@ class _AppShellState extends State<AppShell> {
       const TrendsPage(),
       HistoryPage(
         entries: _entries,
-        onOpenEntry: _openEntryForDate,
+        loadEntryByDate: _repository.loadEntryByDate,
+        onSaveEntry: _saveEntryFromHistory,
       ),
     ];
 
