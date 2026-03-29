@@ -5,6 +5,9 @@ import 'package:mood_tracker/features/daily_log/models/daily_log_entry.dart';
 import 'package:mood_tracker/features/wearables/models/daily_wearable_metric.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_metric_type.dart';
 
+const _manualMarkerColor = Color(0xFF2F7D5B);
+const _wearableMarkerColor = Color(0xFFCC7A00);
+
 class HistoryPage extends StatefulWidget {
   const HistoryPage({
     super.key,
@@ -38,8 +41,10 @@ class _HistoryPageState extends State<HistoryPage> {
   @override
   Widget build(BuildContext context) {
     final today = _dateOnly(DateTime.now());
-    final loggedDates = {
+    final manualLoggedDates = {
       for (final entry in widget.entries) _dateKey(entry.loggedAt),
+    };
+    final wearableLoggedDates = {
       for (final metric in widget.wearableMetrics) _dateKey(metric.date),
     };
     final days = _buildMonthCells(_visibleMonth);
@@ -82,6 +87,8 @@ class _HistoryPageState extends State<HistoryPage> {
             'Tap a recorded day to edit it, or an empty day to start a log.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
+          const SizedBox(height: 12),
+          const _HistoryLegend(),
           const SizedBox(height: 16),
           _WeekdayHeader(),
           const SizedBox(height: 8),
@@ -103,13 +110,14 @@ class _HistoryPageState extends State<HistoryPage> {
 
               final date = _dateOnly(cell);
               final isFuture = date.isAfter(today);
-              final isLogged = loggedDates.contains(_dateKey(date));
+              final dateKey = _dateKey(date);
               final isToday = date == today;
 
               return _CalendarDayCell(
                 date: date,
                 isFuture: isFuture,
-                isLogged: isLogged,
+                hasManualLog: manualLoggedDates.contains(dateKey),
+                hasWearableLog: wearableLoggedDates.contains(dateKey),
                 isToday: isToday,
                 onTap: isFuture ? null : () => _openLog(context, date),
               );
@@ -212,14 +220,16 @@ class _CalendarDayCell extends StatelessWidget {
   const _CalendarDayCell({
     required this.date,
     required this.isFuture,
-    required this.isLogged,
+    required this.hasManualLog,
+    required this.hasWearableLog,
     required this.isToday,
     required this.onTap,
   });
 
   final DateTime date;
   final bool isFuture;
-  final bool isLogged;
+  final bool hasManualLog;
+  final bool hasWearableLog;
   final bool isToday;
   final VoidCallback? onTap;
 
@@ -257,22 +267,123 @@ class _CalendarDayCell extends StatelessWidget {
                       ),
                 ),
                 const Spacer(),
-                if (isLogged)
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: colorScheme.primary,
-                      shape: BoxShape.circle,
-                    ),
-                  )
-                else
-                  const SizedBox(height: 8),
+                _CalendarMarkers(
+                  hasManualLog: hasManualLog,
+                  hasWearableLog: hasWearableLog,
+                ),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _CalendarMarkers extends StatelessWidget {
+  const _CalendarMarkers({
+    required this.hasManualLog,
+    required this.hasWearableLog,
+  });
+
+  final bool hasManualLog;
+  final bool hasWearableLog;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!hasManualLog && !hasWearableLog) {
+      return const SizedBox(height: 8);
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _HistoryMarkerDot(
+          color: _manualMarkerColor,
+          isVisible: hasManualLog,
+        ),
+        const SizedBox(width: 4),
+        _HistoryMarkerDot(
+          color: _wearableMarkerColor,
+          isVisible: hasWearableLog,
+        ),
+      ],
+    );
+  }
+}
+
+class _HistoryMarkerDot extends StatelessWidget {
+  const _HistoryMarkerDot({
+    required this.color,
+    required this.isVisible,
+  });
+
+  final Color color;
+  final bool isVisible;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 8,
+      height: 8,
+      decoration: BoxDecoration(
+        color: isVisible ? color : Colors.transparent,
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+}
+
+class _HistoryLegend extends StatelessWidget {
+  const _HistoryLegend();
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 8,
+      children: [
+        _LegendItem(
+          color: _manualMarkerColor,
+          label: 'Manual data',
+        ),
+        _LegendItem(
+          color: _wearableMarkerColor,
+          label: 'Wearable data',
+        ),
+      ],
+    );
+  }
+}
+
+class _LegendItem extends StatelessWidget {
+  const _LegendItem({
+    required this.color,
+    required this.label,
+  });
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
     );
   }
 }
