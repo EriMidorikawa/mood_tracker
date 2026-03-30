@@ -4,6 +4,7 @@ import 'package:mood_tracker/features/daily_log/models/daily_log_entry.dart';
 import 'package:mood_tracker/features/wearables/models/daily_wearable_metric.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_metric_type.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_provider.dart';
+import 'package:mood_tracker/shared/date_utils.dart';
 
 class TrendsPage extends StatefulWidget {
   const TrendsPage({
@@ -992,7 +993,7 @@ List<_ChartPointDetail?> _buildWearablePointDetails({
 }
 
 List<DateTime> _buildSlotDates(_TrendPeriod period, int selectedYear) {
-  final today = _dateOnly(DateTime.now());
+  final today = dateOnly(DateTime.now());
   switch (period) {
     case _TrendPeriod.sevenDays:
       return [
@@ -1035,11 +1036,11 @@ List<double?> _buildSubjectiveSeriesValues(
     case _TrendPeriod.sevenDays:
     case _TrendPeriod.thirtyDays:
       final entryByDate = {
-        for (final entry in entries) _dateKey(entry.loggedAt): entry,
+        for (final entry in entries) dateKey(entry.loggedAt): entry,
       };
       return [
         for (final date in slotDates)
-          entryByDate[_dateKey(date)]?.responses[metricKey]?.toDouble(),
+          entryByDate[dateKey(date)]?.responses[metricKey]?.toDouble(),
       ];
     case _TrendPeriod.threeMonths:
       return [
@@ -1079,10 +1080,10 @@ List<double?> _buildWearableSeriesValues(
     case _TrendPeriod.sevenDays:
     case _TrendPeriod.thirtyDays:
       final metricByDate = {
-        for (final metric in filteredMetrics) _dateKey(metric.date): metric,
+        for (final metric in filteredMetrics) dateKey(metric.date): metric,
       };
       return [
-        for (final date in slotDates) metricByDate[_dateKey(date)]?.value,
+        for (final date in slotDates) metricByDate[dateKey(date)]?.value,
       ];
     case _TrendPeriod.threeMonths:
       return [
@@ -1115,7 +1116,7 @@ double? _averageEntryRange({
   var count = 0;
 
   for (final entry in entries) {
-    final loggedAt = _dateOnly(entry.loggedAt);
+    final loggedAt = dateOnly(entry.loggedAt);
     if (loggedAt.isBefore(start) || loggedAt.isAfter(end)) {
       continue;
     }
@@ -1141,7 +1142,7 @@ double? _averageWearableRange({
   var count = 0;
 
   for (final metric in metrics) {
-    final date = _dateOnly(metric.date);
+    final date = dateOnly(metric.date);
     if (date.isBefore(start) || date.isAfter(end)) {
       continue;
     }
@@ -1301,20 +1302,9 @@ double _ratioForDate(DateTime start, DateTime end, DateTime date) {
   return date.difference(start).inDays / totalDays;
 }
 
-DateTime _dateOnly(DateTime dateTime) {
-  return DateTime(dateTime.year, dateTime.month, dateTime.day);
-}
-
 DateTime _startOfWeek(DateTime dateTime) {
-  final date = _dateOnly(dateTime);
+  final date = dateOnly(dateTime);
   return date.subtract(Duration(days: date.weekday - DateTime.monday));
-}
-
-String _dateKey(DateTime dateTime) {
-  final year = dateTime.year.toString().padLeft(4, '0');
-  final month = dateTime.month.toString().padLeft(2, '0');
-  final day = dateTime.day.toString().padLeft(2, '0');
-  return '$year-$month-$day';
 }
 
 String _formatShortDate(DateTime dateTime) {

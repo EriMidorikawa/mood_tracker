@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:mood_tracker/features/daily_log/models/daily_log_entry.dart';
+import 'package:mood_tracker/shared/date_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class LocalDailyLogRepository {
@@ -24,7 +25,7 @@ class LocalDailyLogRepository {
 
   Future<DailyLogEntry?> loadEntryByDate(DateTime logDate) async {
     final entries = await loadEntries();
-    return entries[_dateKey(logDate)];
+    return entries[dateKey(logDate)];
   }
 
   Future<Map<String, DailyLogEntry>> loadEntries() async {
@@ -53,7 +54,7 @@ class LocalDailyLogRepository {
     final entries = await loadEntries();
 
     // MVP rule: one saved entry per log date. Saving the same date overwrites it.
-    entries[_dateKey(entry.loggedAt)] = entry;
+    entries[dateKey(entry.loggedAt)] = entry;
 
     final encodedEntries = <String, dynamic>{
       for (final entry in entries.entries) entry.key: entry.value.toJson(),
@@ -81,11 +82,4 @@ DailyLogEntry? _latestEntryFromEntries(Map<String, DailyLogEntry> entries) {
   final sortedEntries = entries.values.toList()
     ..sort((a, b) => b.loggedAt.compareTo(a.loggedAt));
   return sortedEntries.first;
-}
-
-String _dateKey(DateTime dateTime) {
-  final year = dateTime.year.toString().padLeft(4, '0');
-  final month = dateTime.month.toString().padLeft(2, '0');
-  final day = dateTime.day.toString().padLeft(2, '0');
-  return '$year-$month-$day';
 }

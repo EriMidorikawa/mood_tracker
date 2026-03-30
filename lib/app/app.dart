@@ -14,6 +14,7 @@ import 'package:mood_tracker/features/wearables/data/local_wearable_repository.d
 import 'package:mood_tracker/features/wearables/models/daily_wearable_metric.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_connection.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_provider.dart';
+import 'package:mood_tracker/shared/date_utils.dart';
 
 class MoodTrackerApp extends StatelessWidget {
   const MoodTrackerApp({super.key});
@@ -131,8 +132,8 @@ class _AppShellState extends State<AppShell> {
       return;
     }
 
-    final today = _dateOnly(DateTime.now());
-    if (_dateOnly(fitbitConnection!.lastSyncedAt ?? DateTime(2000)) == today) {
+    final today = dateOnly(DateTime.now());
+    if (dateOnly(fitbitConnection!.lastSyncedAt ?? DateTime(2000)) == today) {
       return;
     }
 
@@ -288,10 +289,6 @@ class _AppShellState extends State<AppShell> {
       ),
     );
   }
-}
-
-DateTime _dateOnly(DateTime dateTime) {
-  return DateTime(dateTime.year, dateTime.month, dateTime.day);
 }
 
 class _AppShellData {

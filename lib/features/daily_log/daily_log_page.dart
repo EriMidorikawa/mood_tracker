@@ -3,6 +3,7 @@ import 'package:mood_tracker/app/settings_menu_button.dart';
 import 'package:mood_tracker/features/daily_log/data/daily_log_seed.dart';
 import 'package:mood_tracker/features/daily_log/models/daily_log_entry.dart';
 import 'package:mood_tracker/features/daily_log/models/daily_log_question.dart';
+import 'package:mood_tracker/shared/date_utils.dart';
 
 class DailyLogPage extends StatefulWidget {
   const DailyLogPage({
@@ -59,7 +60,7 @@ class _DailyLogPageState extends State<DailyLogPage> {
       for (final question in dailyLogQuestions)
         question.id: entry?.responses[question.id] ?? 3,
     };
-    final logDate = _dateOnly(
+    final logDate = dateOnly(
       entry?.loggedAt ?? widget.initialDate ?? DateTime.now(),
     );
     final note = entry?.note ?? '';
@@ -306,8 +307,4 @@ String _formatDate(DateTime dateTime) {
   final year = dateTime.year;
 
   return '$month $day, $year';
-}
-
-DateTime _dateOnly(DateTime dateTime) {
-  return DateTime(dateTime.year, dateTime.month, dateTime.day);
 }

@@ -5,6 +5,7 @@ import 'package:mood_tracker/features/daily_log/daily_log_page.dart';
 import 'package:mood_tracker/features/daily_log/models/daily_log_entry.dart';
 import 'package:mood_tracker/features/wearables/models/daily_wearable_metric.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_metric_type.dart';
+import 'package:mood_tracker/shared/date_utils.dart';
 
 const _manualMarkerColor = Color(0xFF2F7D5B);
 const _wearableMarkerColor = Color(0xFFCC7A00);
@@ -35,18 +36,18 @@ class _HistoryPageState extends State<HistoryPage> {
   @override
   void initState() {
     super.initState();
-    final today = _dateOnly(DateTime.now());
+    final today = dateOnly(DateTime.now());
     _visibleMonth = DateTime(today.year, today.month);
   }
 
   @override
   Widget build(BuildContext context) {
-    final today = _dateOnly(DateTime.now());
+    final today = dateOnly(DateTime.now());
     final manualLoggedDates = {
-      for (final entry in widget.entries) _dateKey(entry.loggedAt),
+      for (final entry in widget.entries) dateKey(entry.loggedAt),
     };
     final wearableLoggedDates = {
-      for (final metric in widget.wearableMetrics) _dateKey(metric.date),
+      for (final metric in widget.wearableMetrics) dateKey(metric.date),
     };
     final days = _buildMonthCells(_visibleMonth);
     final canGoNext = !_isSameMonth(_visibleMonth, today);
@@ -109,16 +110,16 @@ class _HistoryPageState extends State<HistoryPage> {
                 return const SizedBox.shrink();
               }
 
-              final date = _dateOnly(cell);
+              final date = dateOnly(cell);
               final isFuture = date.isAfter(today);
-              final dateKey = _dateKey(date);
+              final dayKey = dateKey(date);
               final isToday = date == today;
 
               return _CalendarDayCell(
                 date: date,
                 isFuture: isFuture,
-                hasManualLog: manualLoggedDates.contains(dateKey),
-                hasWearableLog: wearableLoggedDates.contains(dateKey),
+                hasManualLog: manualLoggedDates.contains(dayKey),
+                hasWearableLog: wearableLoggedDates.contains(dayKey),
                 isToday: isToday,
                 onTap: isFuture ? null : () => _openLog(context, date),
               );
@@ -149,7 +150,7 @@ class _HistoryPageState extends State<HistoryPage> {
           entry: entry,
           wearableMetrics: [
             for (final metric in widget.wearableMetrics)
-              if (_dateOnly(metric.date) == logDate) metric,
+              if (dateOnly(metric.date) == logDate) metric,
           ],
           loadEntryByDate: widget.loadEntryByDate,
           onSaveEntry: widget.onSaveEntry,
@@ -612,17 +613,6 @@ List<DateTime?> _buildMonthCells(DateTime month) {
 
 bool _isSameMonth(DateTime a, DateTime b) {
   return a.year == b.year && a.month == b.month;
-}
-
-DateTime _dateOnly(DateTime dateTime) {
-  return DateTime(dateTime.year, dateTime.month, dateTime.day);
-}
-
-String _dateKey(DateTime dateTime) {
-  final year = dateTime.year.toString().padLeft(4, '0');
-  final month = dateTime.month.toString().padLeft(2, '0');
-  final day = dateTime.day.toString().padLeft(2, '0');
-  return '$year-$month-$day';
 }
 
 String _formatDate(DateTime dateTime) {
