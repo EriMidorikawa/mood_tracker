@@ -7,6 +7,7 @@ import 'package:mood_tracker/features/wearables/data/fitbit_oauth_session_store.
 import 'package:mood_tracker/features/wearables/data/fitbit_oauth_token_store.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_source_adapter.dart';
 import 'package:mood_tracker/features/wearables/data/local_wearable_repository.dart';
+import 'package:mood_tracker/features/wearables/models/fitbit_callback_debug.dart';
 import 'package:mood_tracker/features/wearables/models/daily_wearable_metric.dart';
 import 'package:mood_tracker/features/wearables/models/fitbit_oauth_token.dart';
 import 'package:mood_tracker/features/wearables/models/fitbit_oauth_preparation.dart';
@@ -653,59 +654,23 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _handleFitbitCallback() async {
-    final callback = fitbitCallbackDebugStore.lastCallback.value;
-    if (callback == null ||
-        callback.code == null ||
-        callback.stateMatched != true ||
-        callback.uri.toString() == _lastHandledCallbackUri ||
-        _isHandlingFitbitCallback) {
+    final preparedCallback = _prepareFitbitCallbackHandling();
+    if (preparedCallback == null) {
       return;
     }
 
-    final preparation = fitbitOAuthSessionStore.preparedSession.value;
-    if (preparation == null) {
-      return;
-    }
-
-    _lastHandledCallbackUri = callback.uri.toString();
+    _lastHandledCallbackUri = preparedCallback.callback.uri.toString();
     setState(() {
       _isHandlingFitbitCallback = true;
       _fitbitSyncResult = 'Completing Fitbit authorization...';
     });
 
     try {
-      final token = await _fitbitOAuthClient.exchangeAuthorizationCode(
-        code: callback.code!,
-        codeVerifier: preparation.codeVerifier,
+      await _exchangeFitbitCodeAndSaveToken(
+        callback: preparedCallback.callback,
+        preparation: preparedCallback.preparation,
       );
-      try {
-        await _fitbitTokenStore.saveToken(token);
-      } catch (error) {
-        throw _FitbitCallbackStageException(
-          'Fitbit callback failed while saving token.',
-          error,
-        );
-      }
-
-      final now = DateTime.now();
-      final updatedConnection = await (() async {
-        try {
-          return await _updateFitbitConnection(
-            (existingConnection) => WearableConnection(
-              provider: WearableProvider.fitbit,
-              isConnected: true,
-              accountLabel: existingConnection?.accountLabel,
-              connectedAt: existingConnection?.connectedAt ?? now,
-              lastSyncedAt: existingConnection?.lastSyncedAt,
-            ),
-          );
-        } catch (error) {
-          throw _FitbitCallbackStageException(
-            'Fitbit callback failed while updating local connection state.',
-            error,
-          );
-        }
-      })();
+      final updatedConnection = await _markFitbitConnectionAsConnected();
       if (!mounted) {
         return;
       }
@@ -715,14 +680,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _isHandlingFitbitCallback = false;
         _fitbitSyncResult = 'Fitbit authorization completed';
       });
-      try {
-        await _syncFitbitData(rethrowFailure: true);
-      } catch (error) {
-        throw _FitbitCallbackStageException(
-          'Fitbit callback failed while syncing today\'s Fitbit data.',
-          error,
-        );
-      }
+      await _syncFitbitDataAfterCallback();
     } on FitbitOAuthException catch (error) {
       if (!mounted) {
         return;
@@ -750,6 +708,81 @@ class _SettingsPageState extends State<SettingsPage> {
         _isHandlingFitbitCallback = false;
         _fitbitSyncResult = _formatUnexpectedFitbitCallbackFailure(error);
       });
+    }
+  }
+
+  _PreparedFitbitCallback? _prepareFitbitCallbackHandling() {
+    final callback = fitbitCallbackDebugStore.lastCallback.value;
+    if (!_shouldHandleFitbitCallback(callback)) {
+      return null;
+    }
+
+    final preparation = fitbitOAuthSessionStore.preparedSession.value;
+    if (preparation == null) {
+      return null;
+    }
+
+    return _PreparedFitbitCallback(
+      callback: callback!,
+      preparation: preparation,
+    );
+  }
+
+  bool _shouldHandleFitbitCallback(FitbitCallbackDebug? callback) {
+    return callback != null &&
+        callback.code != null &&
+        callback.stateMatched == true &&
+        callback.uri.toString() != _lastHandledCallbackUri &&
+        !_isHandlingFitbitCallback;
+  }
+
+  Future<void> _exchangeFitbitCodeAndSaveToken({
+    required FitbitCallbackDebug callback,
+    required FitbitOAuthPreparation preparation,
+  }) async {
+    final token = await _fitbitOAuthClient.exchangeAuthorizationCode(
+      code: callback.code!,
+      codeVerifier: preparation.codeVerifier,
+    );
+
+    try {
+      await _fitbitTokenStore.saveToken(token);
+    } catch (error) {
+      throw _FitbitCallbackStageException(
+        'Fitbit callback failed while saving token.',
+        error,
+      );
+    }
+  }
+
+  Future<WearableConnection?> _markFitbitConnectionAsConnected() async {
+    final now = DateTime.now();
+    try {
+      return await _updateFitbitConnection(
+        (existingConnection) => WearableConnection(
+          provider: WearableProvider.fitbit,
+          isConnected: true,
+          accountLabel: existingConnection?.accountLabel,
+          connectedAt: existingConnection?.connectedAt ?? now,
+          lastSyncedAt: existingConnection?.lastSyncedAt,
+        ),
+      );
+    } catch (error) {
+      throw _FitbitCallbackStageException(
+        'Fitbit callback failed while updating local connection state.',
+        error,
+      );
+    }
+  }
+
+  Future<void> _syncFitbitDataAfterCallback() async {
+    try {
+      await _syncFitbitData(rethrowFailure: true);
+    } catch (error) {
+      throw _FitbitCallbackStageException(
+        'Fitbit callback failed while syncing today\'s Fitbit data.',
+        error,
+      );
     }
   }
 }
@@ -781,6 +814,16 @@ class _FitbitCallbackStageException implements Exception {
     final unexpectedMessage = _formatUnexpectedFitbitCallbackFailure(cause);
     return '$prefix $unexpectedMessage';
   }
+}
+
+class _PreparedFitbitCallback {
+  const _PreparedFitbitCallback({
+    required this.callback,
+    required this.preparation,
+  });
+
+  final FitbitCallbackDebug callback;
+  final FitbitOAuthPreparation preparation;
 }
 
 List<DateTime> _buildMissingFitbitBackfillDates({
