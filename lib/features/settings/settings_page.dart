@@ -30,13 +30,7 @@ class _SettingsPageState extends State<SettingsPage> {
   final _fitbitTokenStore = FitbitOAuthTokenStore();
   final _fitbitSyncService = FitbitSyncService();
   WearableConnection? _fitbitConnection;
-  bool _isSyncingFitbit = false;
-  bool _isBackfillingFitbit = false;
-  int _selectedFitbitBackfillDays = 90;
-  int _fitbitBackfillProgress = 0;
-  int _fitbitBackfillTarget = 90;
-  bool _isHandlingFitbitCallback = false;
-  String? _fitbitSyncResult;
+  _FitbitSettingsState _fitbitState = const _FitbitSettingsState();
   String? _lastHandledCallbackUri;
 
   @override
@@ -127,11 +121,12 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   const SizedBox(height: 16),
                   FilledButton(
-                    onPressed: _isHandlingFitbitCallback || _isSyncingFitbit
+                    onPressed: _fitbitState.isHandlingCallback ||
+                            _fitbitState.isSyncing
                         ? null
                         : _handleFitbitPrimaryAction,
                     child: Text(
-                      _isHandlingFitbitCallback
+                      _fitbitState.isHandlingCallback
                           ? 'Connecting Fitbit...'
                           : _fitbitPrimaryActionLabel,
                     ),
@@ -153,34 +148,37 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                         )
                         .toList(),
-                    selected: {_selectedFitbitBackfillDays},
-                    onSelectionChanged: _isBackfillingFitbit
+                    selected: {_fitbitState.selectedBackfillDays},
+                    onSelectionChanged: _fitbitState.isBackfilling
                         ? null
                         : (selection) {
                             setState(() {
-                              _selectedFitbitBackfillDays = selection.first;
-                              _fitbitBackfillTarget = _selectedFitbitBackfillDays;
+                              _fitbitState = _fitbitState.copyWith(
+                                selectedBackfillDays: selection.first,
+                                backfillTarget: selection.first,
+                              );
                             });
                           },
                   ),
                   const SizedBox(height: 12),
                   OutlinedButton(
-                    onPressed: _isBackfillingFitbit ? null : _backfillFitbitData,
+                    onPressed:
+                        _fitbitState.isBackfilling ? null : _backfillFitbitData,
                     child: Text(
-                      _isBackfillingFitbit
+                      _fitbitState.isBackfilling
                           ? 'Backfilling Fitbit data...'
-                          : 'Backfill last $_selectedFitbitBackfillDays days',
+                          : 'Backfill last ${_fitbitState.selectedBackfillDays} days',
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Import recent Fitbit history for the last $_selectedFitbitBackfillDays days.',
+                    'Import recent Fitbit history for the last ${_fitbitState.selectedBackfillDays} days.',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
-                  if (_isBackfillingFitbit) ...[
+                  if (_fitbitState.isBackfilling) ...[
                     const SizedBox(height: 8),
                     Text(
-                      '$_fitbitBackfillProgress / $_fitbitBackfillTarget',
+                      '${_fitbitState.backfillProgress} / ${_fitbitState.backfillTarget}',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
@@ -191,10 +189,10 @@ class _SettingsPageState extends State<SettingsPage> {
                         : _disconnectFitbit,
                     child: const Text('Disconnect'),
                   ),
-                  if (_fitbitSyncResult != null) ...[
+                  if (_fitbitState.syncResult != null) ...[
                     const SizedBox(height: 12),
                     Text(
-                      _fitbitSyncResult!,
+                      _fitbitState.syncResult!,
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
@@ -285,20 +283,20 @@ class _SettingsPageState extends State<SettingsPage> {
 
     setState(() {
       _fitbitConnection = null;
-      _isSyncingFitbit = false;
-      _isBackfillingFitbit = false;
-      _selectedFitbitBackfillDays = 90;
-      _fitbitBackfillProgress = 0;
-      _fitbitBackfillTarget = _selectedFitbitBackfillDays;
-      _isHandlingFitbitCallback = false;
-      _fitbitSyncResult = 'Local app data has been reset.';
+      _fitbitState = const _FitbitSettingsState(
+        selectedBackfillDays: 90,
+        backfillTarget: 90,
+        syncResult: 'Local app data has been reset.',
+      );
     });
   }
 
   Future<void> _syncFitbitData({bool rethrowFailure = false}) async {
     setState(() {
-      _isSyncingFitbit = true;
-      _fitbitSyncResult = null;
+      _fitbitState = _fitbitState.copyWith(
+        isSyncing: true,
+        clearSyncResult: true,
+      );
     });
 
     try {
@@ -313,9 +311,10 @@ class _SettingsPageState extends State<SettingsPage> {
 
       setState(() {
         _fitbitConnection = result.connection;
-        _isSyncingFitbit = false;
-        _fitbitSyncResult =
-            'Synced Fitbit data for ${formatShortDate(result.syncedDate)}';
+        _fitbitState = _fitbitState.copyWith(
+          isSyncing: false,
+          syncResult: 'Synced Fitbit data for ${formatShortDate(result.syncedDate)}',
+        );
       });
     } on FitbitApiException catch (error) {
       if (!mounted) {
@@ -323,8 +322,10 @@ class _SettingsPageState extends State<SettingsPage> {
       }
 
       setState(() {
-        _isSyncingFitbit = false;
-        _fitbitSyncResult = error.message;
+        _fitbitState = _fitbitState.copyWith(
+          isSyncing: false,
+          syncResult: error.message,
+        );
       });
       if (rethrowFailure) {
         rethrow;
@@ -335,8 +336,10 @@ class _SettingsPageState extends State<SettingsPage> {
       }
 
       setState(() {
-        _isSyncingFitbit = false;
-        _fitbitSyncResult = 'Fitbit sync failed';
+        _fitbitState = _fitbitState.copyWith(
+          isSyncing: false,
+          syncResult: 'Fitbit sync failed',
+        );
       });
       if (rethrowFailure) {
         rethrow;
@@ -346,16 +349,18 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _backfillFitbitData() async {
     setState(() {
-      _isBackfillingFitbit = true;
-      _fitbitBackfillProgress = 0;
-      _fitbitBackfillTarget = _selectedFitbitBackfillDays;
-      _fitbitSyncResult = 'Backfilling Fitbit data...';
+      _fitbitState = _fitbitState.copyWith(
+        isBackfilling: true,
+        backfillProgress: 0,
+        backfillTarget: _fitbitState.selectedBackfillDays,
+        syncResult: 'Backfilling Fitbit data...',
+      );
     });
 
     var importedDays = 0;
     try {
       final result = await _fitbitSyncService.backfillRecentDays(
-        days: _selectedFitbitBackfillDays,
+        days: _fitbitState.selectedBackfillDays,
         expiredMessage: 'Fitbit session expired. Please authorize again.',
         missingMessage: 'Fitbit authorization required',
         onProgress: (completed, target) {
@@ -364,19 +369,23 @@ class _SettingsPageState extends State<SettingsPage> {
           }
 
           setState(() {
-            _fitbitBackfillProgress = completed;
-            _fitbitBackfillTarget = target;
+            _fitbitState = _fitbitState.copyWith(
+              backfillProgress: completed,
+              backfillTarget: target,
+            );
           });
         },
       );
       importedDays = result.importedDays;
       if (result.targetDays == 0) {
         setState(() {
-          _isBackfillingFitbit = false;
-          _fitbitBackfillProgress = 0;
-          _fitbitBackfillTarget = 0;
-          _fitbitSyncResult = 'No new Fitbit data was needed. Skipped '
-              '${result.skippedDays} already imported days.';
+          _fitbitState = _fitbitState.copyWith(
+            isBackfilling: false,
+            backfillProgress: 0,
+            backfillTarget: 0,
+            syncResult:
+                'No new Fitbit data was needed. Skipped ${result.skippedDays} already imported days.',
+          );
         });
         return;
       }
@@ -386,12 +395,14 @@ class _SettingsPageState extends State<SettingsPage> {
 
       setState(() {
         _fitbitConnection = result.connection;
-        _isBackfillingFitbit = false;
-        _fitbitBackfillProgress = result.importedDays + result.failedDays;
-        _fitbitBackfillTarget = result.targetDays;
-        _fitbitSyncResult = result.failedDays == 0
-            ? 'Imported ${result.importedDays} new days. Skipped ${result.skippedDays} already imported days.'
-            : 'Imported ${result.importedDays} new days. Skipped ${result.skippedDays} already imported days. Some days could not be synced.';
+        _fitbitState = _fitbitState.copyWith(
+          isBackfilling: false,
+          backfillProgress: result.importedDays + result.failedDays,
+          backfillTarget: result.targetDays,
+          syncResult: result.failedDays == 0
+              ? 'Imported ${result.importedDays} new days. Skipped ${result.skippedDays} already imported days.'
+              : 'Imported ${result.importedDays} new days. Skipped ${result.skippedDays} already imported days. Some days could not be synced.',
+        );
       });
     } on FitbitApiException catch (error) {
       if (!mounted) {
@@ -399,14 +410,17 @@ class _SettingsPageState extends State<SettingsPage> {
       }
 
       setState(() {
-        _isBackfillingFitbit = false;
-        _fitbitBackfillProgress = importedDays;
-        _fitbitBackfillTarget = _fitbitBackfillTarget == 0
-            ? _selectedFitbitBackfillDays
-            : _fitbitBackfillTarget;
-        _fitbitSyncResult = importedDays == 0
-            ? error.message
-            : 'Imported $importedDays of $_fitbitBackfillTarget days. Some days could not be synced.';
+        final target = _fitbitState.backfillTarget == 0
+            ? _fitbitState.selectedBackfillDays
+            : _fitbitState.backfillTarget;
+        _fitbitState = _fitbitState.copyWith(
+          isBackfilling: false,
+          backfillProgress: importedDays,
+          backfillTarget: target,
+          syncResult: importedDays == 0
+              ? error.message
+              : 'Imported $importedDays of $target days. Some days could not be synced.',
+        );
       });
     } catch (_) {
       if (!mounted) {
@@ -414,13 +428,15 @@ class _SettingsPageState extends State<SettingsPage> {
       }
 
       setState(() {
-        _isBackfillingFitbit = false;
-        _fitbitBackfillProgress = importedDays;
-        _fitbitBackfillTarget = _fitbitBackfillTarget == 0
-            ? _selectedFitbitBackfillDays
-            : _fitbitBackfillTarget;
-        _fitbitSyncResult =
-            'No Fitbit data was imported. Some days could not be synced.';
+        final target = _fitbitState.backfillTarget == 0
+            ? _fitbitState.selectedBackfillDays
+            : _fitbitState.backfillTarget;
+        _fitbitState = _fitbitState.copyWith(
+          isBackfilling: false,
+          backfillProgress: importedDays,
+          backfillTarget: target,
+          syncResult: 'No Fitbit data was imported. Some days could not be synced.',
+        );
       });
     }
   }
@@ -525,10 +541,12 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
 
-    setState(() {
-      _fitbitConnection = updatedConnection;
-      _fitbitSyncResult = 'Fitbit has been disconnected from this app.';
-    });
+      setState(() {
+        _fitbitConnection = updatedConnection;
+        _fitbitState = _fitbitState.copyWith(
+          syncResult: 'Fitbit has been disconnected from this app.',
+        );
+      });
   }
 
   Future<void> _openFitbitAuthorization(
@@ -543,7 +561,9 @@ class _SettingsPageState extends State<SettingsPage> {
     }
 
     setState(() {
-      _fitbitSyncResult = 'Could not open Fitbit authorization URL';
+      _fitbitState = _fitbitState.copyWith(
+        syncResult: 'Could not open Fitbit authorization URL',
+      );
     });
   }
 
@@ -555,8 +575,10 @@ class _SettingsPageState extends State<SettingsPage> {
 
     _lastHandledCallbackUri = preparedCallback.callback.uri.toString();
     setState(() {
-      _isHandlingFitbitCallback = true;
-      _fitbitSyncResult = 'Completing Fitbit authorization...';
+      _fitbitState = _fitbitState.copyWith(
+        isHandlingCallback: true,
+        syncResult: 'Completing Fitbit authorization...',
+      );
     });
 
     try {
@@ -571,8 +593,10 @@ class _SettingsPageState extends State<SettingsPage> {
 
       setState(() {
         _fitbitConnection = updatedConnection;
-        _isHandlingFitbitCallback = false;
-        _fitbitSyncResult = 'Fitbit authorization completed';
+        _fitbitState = _fitbitState.copyWith(
+          isHandlingCallback: false,
+          syncResult: 'Fitbit authorization completed',
+        );
       });
       await _syncFitbitDataAfterCallback();
     } on FitbitOAuthException catch (error) {
@@ -581,8 +605,10 @@ class _SettingsPageState extends State<SettingsPage> {
       }
 
       setState(() {
-        _isHandlingFitbitCallback = false;
-        _fitbitSyncResult = error.message;
+        _fitbitState = _fitbitState.copyWith(
+          isHandlingCallback: false,
+          syncResult: error.message,
+        );
       });
     } on _FitbitCallbackStageException catch (error) {
       if (!mounted) {
@@ -590,8 +616,10 @@ class _SettingsPageState extends State<SettingsPage> {
       }
 
       setState(() {
-        _isHandlingFitbitCallback = false;
-        _fitbitSyncResult = error.toUserMessage();
+        _fitbitState = _fitbitState.copyWith(
+          isHandlingCallback: false,
+          syncResult: error.toUserMessage(),
+        );
       });
     } catch (error) {
       if (!mounted) {
@@ -599,8 +627,10 @@ class _SettingsPageState extends State<SettingsPage> {
       }
 
       setState(() {
-        _isHandlingFitbitCallback = false;
-        _fitbitSyncResult = _formatUnexpectedFitbitCallbackFailure(error);
+        _fitbitState = _fitbitState.copyWith(
+          isHandlingCallback: false,
+          syncResult: _formatUnexpectedFitbitCallbackFailure(error),
+        );
       });
     }
   }
@@ -627,7 +657,7 @@ class _SettingsPageState extends State<SettingsPage> {
         callback.code != null &&
         callback.stateMatched == true &&
         callback.uri.toString() != _lastHandledCallbackUri &&
-        !_isHandlingFitbitCallback;
+        !_fitbitState.isHandlingCallback;
   }
 
   Future<void> _exchangeFitbitCodeAndSaveToken({
@@ -718,4 +748,46 @@ class _PreparedFitbitCallback {
 
   final FitbitCallbackDebug callback;
   final FitbitOAuthPreparation preparation;
+}
+
+class _FitbitSettingsState {
+  const _FitbitSettingsState({
+    this.isSyncing = false,
+    this.isBackfilling = false,
+    this.selectedBackfillDays = 90,
+    this.backfillProgress = 0,
+    this.backfillTarget = 90,
+    this.isHandlingCallback = false,
+    this.syncResult,
+  });
+
+  final bool isSyncing;
+  final bool isBackfilling;
+  final int selectedBackfillDays;
+  final int backfillProgress;
+  final int backfillTarget;
+  final bool isHandlingCallback;
+  final String? syncResult;
+
+  _FitbitSettingsState copyWith({
+    bool? isSyncing,
+    bool? isBackfilling,
+    int? selectedBackfillDays,
+    int? backfillProgress,
+    int? backfillTarget,
+    bool? isHandlingCallback,
+    String? syncResult,
+    bool clearSyncResult = false,
+  }) {
+    return _FitbitSettingsState(
+      isSyncing: isSyncing ?? this.isSyncing,
+      isBackfilling: isBackfilling ?? this.isBackfilling,
+      selectedBackfillDays:
+          selectedBackfillDays ?? this.selectedBackfillDays,
+      backfillProgress: backfillProgress ?? this.backfillProgress,
+      backfillTarget: backfillTarget ?? this.backfillTarget,
+      isHandlingCallback: isHandlingCallback ?? this.isHandlingCallback,
+      syncResult: clearSyncResult ? null : (syncResult ?? this.syncResult),
+    );
+  }
 }
