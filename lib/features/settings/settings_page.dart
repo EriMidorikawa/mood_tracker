@@ -97,46 +97,8 @@ class _SettingsPageState extends State<SettingsPage> {
             onDisconnect: _fitbitConnection == null ? null : _disconnectFitbit,
           ),
           const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Danger Zone',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Reset local app data',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'This will remove local daily logs, wearable data, saved Fitbit session, and connection state.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Fitbit account data on Fitbit will not be deleted.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 16),
-                  OutlinedButton(
-                    onPressed: _resetLocalAppData,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Theme.of(context).colorScheme.error,
-                    ),
-                    child: const Text('Reset local app data'),
-                  ),
-                ],
-              ),
-            ),
+          _DangerZoneCard(
+            onResetLocalAppData: _resetLocalAppData,
           ),
         ],
       ),
@@ -840,6 +802,59 @@ class _FitbitSettingsState {
       backfillTarget: backfillTarget ?? this.backfillTarget,
       isHandlingCallback: isHandlingCallback ?? this.isHandlingCallback,
       syncResult: clearSyncResult ? null : (syncResult ?? this.syncResult),
+    );
+  }
+}
+
+class _DangerZoneCard extends StatelessWidget {
+  const _DangerZoneCard({
+    required this.onResetLocalAppData,
+  });
+
+  final VoidCallback onResetLocalAppData;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Danger Zone',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Reset local app data',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'This will remove local daily logs, wearable data, saved Fitbit session, and connection state.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Fitbit account data on Fitbit will not be deleted.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton(
+              onPressed: onResetLocalAppData,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.error,
+              ),
+              child: const Text('Reset local app data'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
