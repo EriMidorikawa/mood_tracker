@@ -14,13 +14,7 @@ class LocalWearableRepository {
   static const _dailyMetricsKey = 'wearables.daily_metrics';
 
   Future<List<WearableConnection>> loadConnections() async {
-    final preferences = await SharedPreferences.getInstance();
-    final raw = preferences.getString(_connectionsKey);
-    if (raw == null || raw.isEmpty) {
-      return const [];
-    }
-
-    final decoded = jsonDecode(raw) as List<dynamic>;
+    final decoded = await _readJsonList(_connectionsKey);
     return decoded
         .map((item) => WearableConnection.fromJson(item as Map<String, dynamic>))
         .toList();
@@ -37,7 +31,6 @@ class LocalWearableRepository {
   }
 
   Future<void> upsertConnection(WearableConnection connection) async {
-    final preferences = await SharedPreferences.getInstance();
     final connections = await loadConnections();
     final nextConnections = [
       for (final item in connections)
@@ -45,11 +38,11 @@ class LocalWearableRepository {
       connection,
     ];
 
-    await preferences.setString(
+    await _writeJsonList(
       _connectionsKey,
-      jsonEncode([
+      [
         for (final item in nextConnections) item.toJson(),
-      ]),
+      ],
     );
   }
 
@@ -57,13 +50,7 @@ class LocalWearableRepository {
     WearableProvider? provider,
     WearableMetricType? metricType,
   }) async {
-    final preferences = await SharedPreferences.getInstance();
-    final raw = preferences.getString(_measurementsKey);
-    if (raw == null || raw.isEmpty) {
-      return const [];
-    }
-
-    final decoded = jsonDecode(raw) as List<dynamic>;
+    final decoded = await _readJsonList(_measurementsKey);
     final items = decoded
         .map((item) => WearableMeasurement.fromJson(item as Map<String, dynamic>))
         .toList();
@@ -77,12 +64,11 @@ class LocalWearableRepository {
   }
 
   Future<void> saveMeasurements(List<WearableMeasurement> measurements) async {
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(
+    await _writeJsonList(
       _measurementsKey,
-      jsonEncode([
+      [
         for (final item in measurements) item.toJson(),
-      ]),
+      ],
     );
   }
 
@@ -130,13 +116,7 @@ class LocalWearableRepository {
     WearableProvider? provider,
     WearableMetricType? metricType,
   }) async {
-    final preferences = await SharedPreferences.getInstance();
-    final raw = preferences.getString(_dailyMetricsKey);
-    if (raw == null || raw.isEmpty) {
-      return const [];
-    }
-
-    final decoded = jsonDecode(raw) as List<dynamic>;
+    final decoded = await _readJsonList(_dailyMetricsKey);
     final items = decoded
         .map((item) => DailyWearableMetric.fromJson(item as Map<String, dynamic>))
         .toList();
@@ -173,12 +153,11 @@ class LocalWearableRepository {
   }
 
   Future<void> saveDailyMetrics(List<DailyWearableMetric> metrics) async {
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(
+    await _writeJsonList(
       _dailyMetricsKey,
-      jsonEncode([
+      [
         for (final item in metrics) item.toJson(),
-      ]),
+      ],
     );
   }
 
@@ -201,6 +180,21 @@ class LocalWearableRepository {
   Future<void> clearConnections() async {
     final preferences = await SharedPreferences.getInstance();
     await preferences.remove(_connectionsKey);
+  }
+
+  Future<List<dynamic>> _readJsonList(String key) async {
+    final preferences = await SharedPreferences.getInstance();
+    final raw = preferences.getString(key);
+    if (raw == null || raw.isEmpty) {
+      return const [];
+    }
+
+    return jsonDecode(raw) as List<dynamic>;
+  }
+
+  Future<void> _writeJsonList(String key, List<Object?> items) async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(key, jsonEncode(items));
   }
 }
 
