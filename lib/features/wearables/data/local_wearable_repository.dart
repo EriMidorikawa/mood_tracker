@@ -5,6 +5,7 @@ import 'package:mood_tracker/features/wearables/models/wearable_connection.dart'
 import 'package:mood_tracker/features/wearables/models/wearable_measurement.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_metric_type.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_provider.dart';
+import 'package:mood_tracker/shared/date_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class LocalWearableRepository {
@@ -90,7 +91,7 @@ class LocalWearableRepository {
     required WearableMetricType metricType,
     required DateTime date,
   }) async {
-    final day = _dateOnly(date);
+    final day = dateOnly(date);
     final measurements = await loadMeasurements(
       provider: provider,
       metricType: metricType,
@@ -98,7 +99,7 @@ class LocalWearableRepository {
 
     final values = [
       for (final measurement in measurements)
-        if (_dateOnly(measurement.recordedAt) == day) measurement.value,
+        if (dateOnly(measurement.recordedAt) == day) measurement.value,
     ];
 
     // Keep the same missing-data policy as Daily Log / Trends:
@@ -154,8 +155,8 @@ class LocalWearableRepository {
     WearableProvider? provider,
     WearableMetricType? metricType,
   }) async {
-    final start = _dateOnly(startDate);
-    final end = _dateOnly(endDate);
+    final start = dateOnly(startDate);
+    final end = dateOnly(endDate);
     final metrics = await loadDailyMetrics(
       provider: provider,
       metricType: metricType,
@@ -163,10 +164,10 @@ class LocalWearableRepository {
 
     final filtered = [
       for (final metric in metrics)
-        if (!_dateOnly(metric.date).isBefore(start) &&
-            !_dateOnly(metric.date).isAfter(end))
+        if (!dateOnly(metric.date).isBefore(start) &&
+            !dateOnly(metric.date).isAfter(end))
           metric,
-    ]..sort((a, b) => _dateOnly(a.date).compareTo(_dateOnly(b.date)));
+    ]..sort((a, b) => dateOnly(a.date).compareTo(dateOnly(b.date)));
 
     return filtered;
   }
@@ -203,10 +204,6 @@ class LocalWearableRepository {
   }
 }
 
-DateTime _dateOnly(DateTime dateTime) {
-  return DateTime(dateTime.year, dateTime.month, dateTime.day);
-}
-
 bool _containsSameDailyMetric(
   List<DailyWearableMetric> metrics,
   DailyWearableMetric candidate,
@@ -214,7 +211,7 @@ bool _containsSameDailyMetric(
   for (final metric in metrics) {
     if (metric.provider == candidate.provider &&
         metric.metricType == candidate.metricType &&
-        _dateOnly(metric.date) == _dateOnly(candidate.date)) {
+        dateOnly(metric.date) == dateOnly(candidate.date)) {
       return true;
     }
   }

@@ -13,6 +13,7 @@ import 'package:mood_tracker/features/wearables/models/fitbit_oauth_preparation.
 import 'package:mood_tracker/features/wearables/models/wearable_connection.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_metric_type.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_provider.dart';
+import 'package:mood_tracker/shared/date_utils.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -308,7 +309,7 @@ class _SettingsPageState extends State<SettingsPage> {
         failureMessage: 'Could not sync Fitbit data. Please authorize again.',
       );
 
-      final today = _dateOnly(DateTime.now());
+      final today = dateOnly(DateTime.now());
       final now = DateTime.now();
       final fitbitAdapter = FitbitSourceAdapter(
         fetchSnapshot:
@@ -378,7 +379,7 @@ class _SettingsPageState extends State<SettingsPage> {
         failureMessage: 'Could not sync Fitbit data. Please authorize again.',
       );
 
-      final today = _dateOnly(DateTime.now());
+      final today = dateOnly(DateTime.now());
       final startDate = today.subtract(
         Duration(days: _selectedFitbitBackfillDays - 1),
       );
@@ -788,17 +789,17 @@ List<DateTime> _buildMissingFitbitBackfillDates({
 }) {
   final metricTypesByDate = <String, Set<WearableMetricType>>{};
   for (final metric in existingMetrics) {
-    final dateKey = _dateKey(metric.date);
-    metricTypesByDate.putIfAbsent(dateKey, () => <WearableMetricType>{}).add(
+    final dayKey = dateKey(metric.date);
+    metricTypesByDate.putIfAbsent(dayKey, () => <WearableMetricType>{}).add(
       metric.metricType,
     );
   }
 
   final missingDates = <DateTime>[];
-  var cursor = _dateOnly(startDate);
-  final end = _dateOnly(endDate);
+  var cursor = dateOnly(startDate);
+  final end = dateOnly(endDate);
   while (!cursor.isAfter(end)) {
-    final metricTypes = metricTypesByDate[_dateKey(cursor)] ?? const {};
+    final metricTypes = metricTypesByDate[dateKey(cursor)] ?? const {};
     if (!(metricTypes.contains(WearableMetricType.sleepDurationMin) &&
         metricTypes.contains(WearableMetricType.restingHeartRateBpm))) {
       missingDates.add(cursor);
@@ -807,17 +808,6 @@ List<DateTime> _buildMissingFitbitBackfillDates({
   }
 
   return missingDates;
-}
-
-DateTime _dateOnly(DateTime dateTime) {
-  return DateTime(dateTime.year, dateTime.month, dateTime.day);
-}
-
-String _dateKey(DateTime dateTime) {
-  final year = dateTime.year.toString().padLeft(4, '0');
-  final month = dateTime.month.toString().padLeft(2, '0');
-  final day = dateTime.day.toString().padLeft(2, '0');
-  return '$year-$month-$day';
 }
 
 String _formatDateTime(DateTime dateTime) {
