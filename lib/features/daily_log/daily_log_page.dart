@@ -34,6 +34,7 @@ class _DailyLogPageState extends State<DailyLogPage> {
   late final TextEditingController _memoController;
   late Map<String, int> _initialResponses;
   late String _initialNote;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -76,6 +77,10 @@ class _DailyLogPageState extends State<DailyLogPage> {
   }
 
   Future<void> _save() async {
+    if (_isSaving) {
+      return;
+    }
+
     FocusScope.of(context).unfocus();
     final entry = DailyLogEntry(
       loggedAt: _selectedLogDate,
@@ -86,11 +91,39 @@ class _DailyLogPageState extends State<DailyLogPage> {
       note: _memoController.text.trim(),
     );
 
-    await widget.onSave(entry);
-    _setInitialState(
-      responses: _responses,
-      note: entry.note,
-    );
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      await widget.onSave(entry);
+      _setInitialState(
+        responses: _responses,
+        note: entry.note,
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('Could not save the daily log.')),
+        );
+      setState(() {
+        _isSaving = false;
+      });
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isSaving = false;
+    });
 
     if (!mounted || !widget.popOnSave) {
       return;
@@ -230,9 +263,9 @@ class _DailyLogPageState extends State<DailyLogPage> {
             ),
             const SizedBox(height: 16),
             FilledButton.icon(
-              onPressed: _save,
+              onPressed: _isSaving ? null : _save,
               icon: const Icon(Icons.save_outlined),
-              label: const Text('Save'),
+              label: Text(_isSaving ? 'Saving...' : 'Save'),
             ),
           ],
         ),
