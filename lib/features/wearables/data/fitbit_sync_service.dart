@@ -151,11 +151,13 @@ class FitbitSyncService {
         failedDays: 0,
         skippedDays: skippedDays,
         targetDays: 0,
+        stopReason: null,
       );
     }
 
     var importedDays = 0;
     var failedDays = 0;
+    FitbitBackfillStopReason? stopReason;
     for (final date in missingDates) {
       try {
         final metrics = await _fetchDailyMetrics(
@@ -164,6 +166,14 @@ class FitbitSyncService {
         );
         await _wearableRepository.upsertDailyMetrics(metrics);
         importedDays += 1;
+      } on FitbitApiException catch (error) {
+        failedDays += 1;
+        stopReason = _classifyBackfillStopReason(error);
+        onProgress?.call(importedDays + failedDays, missingDates.length);
+        if (stopReason != null) {
+          break;
+        }
+        continue;
       } catch (_) {
         failedDays += 1;
       }
@@ -171,16 +181,9 @@ class FitbitSyncService {
       onProgress?.call(importedDays + failedDays, missingDates.length);
     }
 
-    final now = DateTime.now();
-    final connection = await _updateFitbitConnection(
-      (existingConnection) => WearableConnection(
-        provider: WearableProvider.fitbit,
-        isConnected: true,
-        accountLabel: existingConnection?.accountLabel,
-        connectedAt: existingConnection?.connectedAt ?? now,
-        lastSyncedAt: now,
-      ),
-    );
+    final connection = importedDays > 0
+        ? await _updateBackfillConnection()
+        : await loadConnection();
 
     return FitbitBackfillResult(
       connection: connection,
@@ -188,6 +191,7 @@ class FitbitSyncService {
       failedDays: failedDays,
       skippedDays: skippedDays,
       targetDays: missingDates.length,
+      stopReason: stopReason,
     );
   }
 
@@ -229,6 +233,19 @@ class FitbitSyncService {
     );
     return loadConnection();
   }
+
+  Future<WearableConnection?> _updateBackfillConnection() {
+    final now = DateTime.now();
+    return _updateFitbitConnection(
+      (existingConnection) => WearableConnection(
+        provider: WearableProvider.fitbit,
+        isConnected: true,
+        accountLabel: existingConnection?.accountLabel,
+        connectedAt: existingConnection?.connectedAt ?? now,
+        lastSyncedAt: now,
+      ),
+    );
+  }
 }
 
 class FitbitDaySyncResult {
@@ -248,6 +265,7 @@ class FitbitBackfillResult {
     required this.failedDays,
     required this.skippedDays,
     required this.targetDays,
+    required this.stopReason,
   });
 
   final WearableConnection? connection;
@@ -255,6 +273,26 @@ class FitbitBackfillResult {
   final int failedDays;
   final int skippedDays;
   final int targetDays;
+  final FitbitBackfillStopReason? stopReason;
+}
+
+enum FitbitBackfillStopReason {
+  authorizationRequired,
+  rateLimited,
+}
+
+FitbitBackfillStopReason? _classifyBackfillStopReason(
+  FitbitApiException error,
+) {
+  if (error.message.contains('(429)')) {
+    return FitbitBackfillStopReason.rateLimited;
+  }
+
+  if (error.message.contains('(401)')) {
+    return FitbitBackfillStopReason.authorizationRequired;
+  }
+
+  return null;
 }
 
 List<DateTime> _buildMissingFitbitBackfillDates({

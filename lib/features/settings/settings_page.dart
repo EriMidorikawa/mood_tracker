@@ -76,13 +76,16 @@ class _SettingsPageState extends State<SettingsPage> {
                     fitbitState.isHandlingCallback || fitbitState.isSyncing
                     ? null
                     : _handleFitbitPrimaryAction,
-                onBackfillSelectionChanged: fitbitState.isBackfilling
+                onBackfillSelectionChanged:
+                    !_fitbitController.hasConnection || fitbitState.isBackfilling
                     ? null
                     : (selection) {
                         _fitbitController.selectBackfillDays(selection.first);
                       },
                 onBackfill:
-                    fitbitState.isBackfilling ? null : _backfillFitbitData,
+                    !_fitbitController.hasConnection || fitbitState.isBackfilling
+                    ? null
+                    : _backfillFitbitData,
                 onDisconnect:
                     _fitbitController.connection == null ? null : _disconnectFitbit,
               );

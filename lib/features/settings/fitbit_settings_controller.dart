@@ -139,6 +139,14 @@ class FitbitSettingsController extends ChangeNotifier {
   }
 
   Future<void> backfill() async {
+    if (!hasConnection) {
+      _state = _state.copyWith(
+        syncResult: 'Connect Fitbit first to use backfill.',
+      );
+      notifyListeners();
+      return;
+    }
+
     _state = _state.copyWith(
       isBackfilling: true,
       backfillProgress: 0,
@@ -179,9 +187,7 @@ class FitbitSettingsController extends ChangeNotifier {
         isBackfilling: false,
         backfillProgress: result.importedDays + result.failedDays,
         backfillTarget: result.targetDays,
-        syncResult: result.failedDays == 0
-            ? 'Imported ${result.importedDays} new days. Skipped ${result.skippedDays} already imported days.'
-            : 'Imported ${result.importedDays} new days. Skipped ${result.skippedDays} already imported days. Some days could not be synced.',
+        syncResult: _buildBackfillResultMessage(result),
       );
       notifyListeners();
     } on FitbitApiException catch (error) {
@@ -265,6 +271,25 @@ class FitbitSettingsController extends ChangeNotifier {
         error,
       );
     }
+  }
+
+  String _buildBackfillResultMessage(FitbitBackfillResult result) {
+    final details =
+        'Imported ${result.importedDays} new days. '
+        'Skipped ${result.skippedDays} already imported days. '
+        'Failed ${result.failedDays} days.';
+
+    return switch (result.stopReason) {
+      FitbitBackfillStopReason.rateLimited =>
+        'Fitbit rate limit reached. $details',
+      FitbitBackfillStopReason.authorizationRequired =>
+        'Fitbit session expired. Please authorize again. $details',
+      null when result.importedDays == 0 =>
+        'No Fitbit data was imported. '
+        'Skipped ${result.skippedDays} already imported days. '
+        'Failed ${result.failedDays} days.',
+      _ => details,
+    };
   }
 }
 
