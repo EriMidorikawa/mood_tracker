@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:mood_tracker/features/daily_log/data/local_daily_log_repository.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_callback_debug_store.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_oauth_session_store.dart';
-import 'package:mood_tracker/features/wearables/data/fitbit_oauth_token_store.dart';
-import 'package:mood_tracker/features/wearables/data/local_wearable_repository.dart';
 import 'package:mood_tracker/features/settings/fitbit_settings_controller.dart';
+import 'package:mood_tracker/features/settings/local_app_reset_service.dart';
 import 'package:mood_tracker/features/wearables/models/fitbit_oauth_preparation.dart';
 import 'package:mood_tracker/shared/format_utils.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -19,10 +17,8 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   static const _backfillOptions = <int>[30, 90];
 
-  final _dailyLogRepository = LocalDailyLogRepository();
-  final _wearableRepository = LocalWearableRepository();
-  final _fitbitTokenStore = FitbitOAuthTokenStore();
   final _fitbitController = FitbitSettingsController();
+  final _localAppResetService = LocalAppResetService();
   String? _lastHandledCallbackUri;
 
   @override
@@ -127,10 +123,7 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
 
-    await _dailyLogRepository.clear();
-    await _wearableRepository.clearDailyMetrics();
-    await _wearableRepository.clearConnections();
-    await _fitbitTokenStore.clear();
+    await _localAppResetService.resetLocalAppData();
     _fitbitController.applyResetLocalAppDataState();
   }
 
