@@ -77,15 +77,21 @@ class _TrendsPageState extends State<TrendsPage> {
       for (final metric in widget.wearableMetrics)
         if (metric.provider == WearableProvider.fitbit) metric,
     ];
+    final sleepMetric = _wearableMetricForType(
+      WearableMetricType.sleepDurationMin,
+    );
+    final heartMetric = _wearableMetricForType(
+      WearableMetricType.restingHeartRateBpm,
+    );
     final sleepChartData = _buildWearableChartData(
       metrics: fitbitMetrics,
-      metric: _wearableMetrics[0],
+      metric: sleepMetric,
       period: _selectedPeriod,
       selectedYear: _selectedYear ?? DateTime.now().year,
     );
     final heartChartData = _buildWearableChartData(
       metrics: fitbitMetrics,
-      metric: _wearableMetrics[1],
+      metric: heartMetric,
       period: _selectedPeriod,
       selectedYear: _selectedYear ?? DateTime.now().year,
     );
@@ -307,7 +313,7 @@ class _TrendsPageState extends State<TrendsPage> {
                 _WearableMetricSection(
                   title: 'Sleep Duration',
                   unitLabel: 'hours',
-                  color: _wearableMetrics[0].color,
+                  color: sleepMetric.color,
                   chartData: sleepChartData,
                   selectedDetail: _selectedSleepPoint,
                   onPointSelected: (detail) {
@@ -320,7 +326,7 @@ class _TrendsPageState extends State<TrendsPage> {
                 _WearableMetricSection(
                   title: 'Resting Heart Rate',
                   unitLabel: 'bpm',
-                  color: _wearableMetrics[1].color,
+                  color: heartMetric.color,
                   chartData: heartChartData,
                   selectedDetail: _selectedHeartPoint,
                   onPointSelected: (detail) {
@@ -352,6 +358,12 @@ class _TrendsPageState extends State<TrendsPage> {
       _comparisonMetric = metric;
       _selectedManualPoint = null;
     });
+  }
+
+  _WearableTrendMetric _wearableMetricForType(WearableMetricType metricType) {
+    return _wearableMetrics.firstWhere(
+      (metric) => metric.metricType == metricType,
+    );
   }
 }
 
