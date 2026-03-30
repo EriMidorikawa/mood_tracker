@@ -95,6 +95,26 @@ Fitbit OAuth を使う場合:
 flutter run --dart-define=FITBIT_CLIENT_SECRET=YOUR_CLIENT_SECRET
 ```
 
+`env.json` を使ってまとめて渡す場合:
+
+```bash
+flutter run --dart-define-from-file=env.json
+```
+
+### Build
+
+release APK を作る例:
+
+```bash
+flutter build apk --release --dart-define-from-file=env.json
+```
+
+作成した APK を端末へ入れる例:
+
+```bash
+flutter install
+```
+
 補足:
 
 - `FITBIT_CLIENT_ID` は現在 [fitbit_config.dart](./lib/features/wearables/config/fitbit_config.dart) にデフォルト値があります
