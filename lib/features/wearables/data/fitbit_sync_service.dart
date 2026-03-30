@@ -80,6 +80,45 @@ class FitbitSyncService {
     );
   }
 
+  Future<FitbitDaySyncResult?> autoSyncTodayIfNeeded(
+    WearableConnection? connection,
+  ) async {
+    if (connection?.isConnected != true) {
+      return null;
+    }
+
+    final today = dateOnly(DateTime.now());
+    if (dateOnly(connection!.lastSyncedAt ?? DateTime(2000)) == today) {
+      return null;
+    }
+
+    final token = await _tokenStore.loadToken();
+    if (token == null || token.isExpired) {
+      return null;
+    }
+
+    final metrics = await _fetchDailyMetrics(
+      accessToken: token.accessToken,
+      date: today,
+    );
+    await _wearableRepository.upsertDailyMetrics(metrics);
+    final now = DateTime.now();
+    final updatedConnection = await _updateFitbitConnection(
+      (existingConnection) => WearableConnection(
+        provider: WearableProvider.fitbit,
+        isConnected: true,
+        accountLabel: existingConnection?.accountLabel ?? connection.accountLabel,
+        connectedAt: existingConnection?.connectedAt ?? connection.connectedAt ?? now,
+        lastSyncedAt: now,
+      ),
+    );
+
+    return FitbitDaySyncResult(
+      syncedDate: today,
+      connection: updatedConnection,
+    );
+  }
+
   Future<FitbitBackfillResult> backfillRecentDays({
     required int days,
     required String missingMessage,

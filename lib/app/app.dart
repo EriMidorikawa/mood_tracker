@@ -6,15 +6,12 @@ import 'package:mood_tracker/features/daily_log/daily_log_page.dart';
 import 'package:mood_tracker/features/history/history_page.dart';
 import 'package:mood_tracker/features/home/home_page.dart';
 import 'package:mood_tracker/features/trends/trends_page.dart';
-import 'package:mood_tracker/features/wearables/data/fitbit_api_client.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_callback_link_service.dart';
-import 'package:mood_tracker/features/wearables/data/fitbit_oauth_token_store.dart';
-import 'package:mood_tracker/features/wearables/data/fitbit_source_adapter.dart';
+import 'package:mood_tracker/features/wearables/data/fitbit_sync_service.dart';
 import 'package:mood_tracker/features/wearables/data/local_wearable_repository.dart';
 import 'package:mood_tracker/features/wearables/models/daily_wearable_metric.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_connection.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_provider.dart';
-import 'package:mood_tracker/shared/date_utils.dart';
 
 class MoodTrackerApp extends StatelessWidget {
   const MoodTrackerApp({super.key});
@@ -47,7 +44,7 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   final _repository = LocalDailyLogRepository();
   final _wearableRepository = LocalWearableRepository();
-  final _fitbitTokenStore = FitbitOAuthTokenStore();
+  final _fitbitSyncService = FitbitSyncService();
   final _fitbitCallbackLinkService = FitbitCallbackLinkService();
   int _selectedIndex = 0;
   List<DailyLogEntry> _entries = const [];
@@ -128,38 +125,13 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _maybeAutoSyncFitbit(WearableConnection? fitbitConnection) async {
-    if (fitbitConnection?.isConnected != true) {
-      return;
-    }
-
-    final today = dateOnly(DateTime.now());
-    if (dateOnly(fitbitConnection!.lastSyncedAt ?? DateTime(2000)) == today) {
-      return;
-    }
-
-    final token = await _fitbitTokenStore.loadToken();
-    if (token == null || token.isExpired) {
-      return;
-    }
-
     try {
-      final now = DateTime.now();
-      final fitbitAdapter = FitbitSourceAdapter(
-        fetchSnapshot:
-            FitbitApiClient(accessToken: token.accessToken).fetchDailySnapshot,
+      final result = await _fitbitSyncService.autoSyncTodayIfNeeded(
+        fitbitConnection,
       );
-      final metrics = await fitbitAdapter.fetchDailyMetrics(today);
-      await _wearableRepository.upsertDailyMetrics(metrics);
-      await _wearableRepository.upsertConnection(
-        WearableConnection(
-          provider: WearableProvider.fitbit,
-          isConnected: true,
-          accountLabel: fitbitConnection.accountLabel,
-          connectedAt: fitbitConnection.connectedAt ?? now,
-          lastSyncedAt: now,
-        ),
-      );
-      await _loadData();
+      if (result != null) {
+        await _loadData();
+      }
     } catch (_) {
       // Keep startup resilient if auto sync cannot complete.
     }

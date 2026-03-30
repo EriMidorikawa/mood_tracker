@@ -2,15 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:mood_tracker/features/daily_log/data/local_daily_log_repository.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_api_client.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_callback_debug_store.dart';
+import 'package:mood_tracker/features/wearables/data/fitbit_callback_service.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_oauth_client.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_oauth_session_store.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_oauth_token_store.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_sync_service.dart';
 import 'package:mood_tracker/features/wearables/data/local_wearable_repository.dart';
-import 'package:mood_tracker/features/wearables/models/fitbit_callback_debug.dart';
 import 'package:mood_tracker/features/wearables/models/fitbit_oauth_preparation.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_connection.dart';
-import 'package:mood_tracker/features/wearables/models/wearable_provider.dart';
 import 'package:mood_tracker/shared/format_utils.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -26,9 +25,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
   final _dailyLogRepository = LocalDailyLogRepository();
   final _wearableRepository = LocalWearableRepository();
-  final _fitbitOAuthClient = FitbitOAuthClient();
   final _fitbitTokenStore = FitbitOAuthTokenStore();
   final _fitbitSyncService = FitbitSyncService();
+  final _fitbitCallbackService = FitbitCallbackService();
   WearableConnection? _fitbitConnection;
   _FitbitSettingsState _fitbitState = const _FitbitSettingsState();
   String? _lastHandledCallbackUri;
@@ -320,19 +319,6 @@ class _SettingsPageState extends State<SettingsPage> {
 
   bool get _hasFitbitConnection => _fitbitConnection?.isConnected == true;
 
-  Future<WearableConnection?> _updateFitbitConnection(
-    WearableConnection Function(WearableConnection? existingConnection)
-        buildConnection,
-  ) async {
-    final existingConnection = await _wearableRepository.loadConnection(
-      WearableProvider.fitbit,
-    );
-    await _wearableRepository.upsertConnection(
-      buildConnection(existingConnection),
-    );
-    return _wearableRepository.loadConnection(WearableProvider.fitbit);
-  }
-
   bool get _isFitbitSyncedToday {
     final lastSyncedAt = _fitbitConnection?.lastSyncedAt;
     if (lastSyncedAt == null) {
@@ -426,12 +412,17 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _handleFitbitCallback() async {
-    final preparedCallback = _prepareFitbitCallbackHandling();
-    if (preparedCallback == null) {
+    final callbackContext = _fitbitCallbackService.prepareCallbackContext(
+      callback: fitbitCallbackDebugStore.lastCallback.value,
+      preparation: fitbitOAuthSessionStore.preparedSession.value,
+      lastHandledCallbackUri: _lastHandledCallbackUri,
+      isHandlingCallback: _fitbitState.isHandlingCallback,
+    );
+    if (callbackContext == null) {
       return;
     }
 
-    _lastHandledCallbackUri = preparedCallback.callback.uri.toString();
+    _lastHandledCallbackUri = callbackContext.callback.uri.toString();
     setState(() {
       _fitbitState = _fitbitState.copyWith(
         isHandlingCallback: true,
@@ -440,11 +431,11 @@ class _SettingsPageState extends State<SettingsPage> {
     });
 
     try {
-      await _exchangeFitbitCodeAndSaveToken(
-        callback: preparedCallback.callback,
-        preparation: preparedCallback.preparation,
+      await _fitbitCallbackService.exchangeCodeAndSaveToken(
+        callbackContext,
       );
-      final updatedConnection = await _markFitbitConnectionAsConnected();
+      final updatedConnection = await _fitbitCallbackService
+          .markConnectionAsConnected();
       if (!mounted) {
         return;
       }
@@ -468,7 +459,7 @@ class _SettingsPageState extends State<SettingsPage> {
           syncResult: error.message,
         );
       });
-    } on _FitbitCallbackStageException catch (error) {
+    } on FitbitCallbackStageException catch (error) {
       if (!mounted) {
         return;
       }
@@ -487,73 +478,9 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(() {
         _fitbitState = _fitbitState.copyWith(
           isHandlingCallback: false,
-          syncResult: _formatUnexpectedFitbitCallbackFailure(error),
+          syncResult: formatUnexpectedFitbitCallbackFailure(error),
         );
       });
-    }
-  }
-
-  _PreparedFitbitCallback? _prepareFitbitCallbackHandling() {
-    final callback = fitbitCallbackDebugStore.lastCallback.value;
-    if (!_shouldHandleFitbitCallback(callback)) {
-      return null;
-    }
-
-    final preparation = fitbitOAuthSessionStore.preparedSession.value;
-    if (preparation == null) {
-      return null;
-    }
-
-    return _PreparedFitbitCallback(
-      callback: callback!,
-      preparation: preparation,
-    );
-  }
-
-  bool _shouldHandleFitbitCallback(FitbitCallbackDebug? callback) {
-    return callback != null &&
-        callback.code != null &&
-        callback.stateMatched == true &&
-        callback.uri.toString() != _lastHandledCallbackUri &&
-        !_fitbitState.isHandlingCallback;
-  }
-
-  Future<void> _exchangeFitbitCodeAndSaveToken({
-    required FitbitCallbackDebug callback,
-    required FitbitOAuthPreparation preparation,
-  }) async {
-    final token = await _fitbitOAuthClient.exchangeAuthorizationCode(
-      code: callback.code!,
-      codeVerifier: preparation.codeVerifier,
-    );
-
-    try {
-      await _fitbitTokenStore.saveToken(token);
-    } catch (error) {
-      throw _FitbitCallbackStageException(
-        'Fitbit callback failed while saving token.',
-        error,
-      );
-    }
-  }
-
-  Future<WearableConnection?> _markFitbitConnectionAsConnected() async {
-    final now = DateTime.now();
-    try {
-      return await _updateFitbitConnection(
-        (existingConnection) => WearableConnection(
-          provider: WearableProvider.fitbit,
-          isConnected: true,
-          accountLabel: existingConnection?.accountLabel,
-          connectedAt: existingConnection?.connectedAt ?? now,
-          lastSyncedAt: existingConnection?.lastSyncedAt,
-        ),
-      );
-    } catch (error) {
-      throw _FitbitCallbackStageException(
-        'Fitbit callback failed while updating local connection state.',
-        error,
-      );
     }
   }
 
@@ -561,51 +488,12 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       await _syncFitbitData(rethrowFailure: true);
     } catch (error) {
-      throw _FitbitCallbackStageException(
+      throw FitbitCallbackStageException(
         'Fitbit callback failed while syncing today\'s Fitbit data.',
         error,
       );
     }
   }
-}
-
-String _formatUnexpectedFitbitCallbackFailure(Object error) {
-  final message = switch (error) {
-    final Exception exception => exception.toString(),
-    _ => error.toString(),
-  };
-  final sanitizedMessage = message.trim();
-  if (sanitizedMessage.isEmpty || sanitizedMessage == error.runtimeType.toString()) {
-    return 'Unexpected Fitbit callback failure: ${error.runtimeType}';
-  }
-
-  return 'Unexpected Fitbit callback failure: ${error.runtimeType} ($sanitizedMessage)';
-}
-
-class _FitbitCallbackStageException implements Exception {
-  const _FitbitCallbackStageException(this.prefix, this.cause);
-
-  final String prefix;
-  final Object cause;
-
-  String toUserMessage() {
-    if (cause is FitbitOAuthException) {
-      return (cause as FitbitOAuthException).message;
-    }
-
-    final unexpectedMessage = _formatUnexpectedFitbitCallbackFailure(cause);
-    return '$prefix $unexpectedMessage';
-  }
-}
-
-class _PreparedFitbitCallback {
-  const _PreparedFitbitCallback({
-    required this.callback,
-    required this.preparation,
-  });
-
-  final FitbitCallbackDebug callback;
-  final FitbitOAuthPreparation preparation;
 }
 
 class _FitbitSectionCard extends StatelessWidget {
