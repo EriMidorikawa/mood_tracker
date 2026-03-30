@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required for Fitbit token exchange and API calls on Android devices. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="Mood Tracker"
         android:name="${applicationName}"
