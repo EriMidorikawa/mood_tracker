@@ -4,6 +4,7 @@ import 'package:mood_tracker/features/daily_log/data/daily_log_seed.dart';
 import 'package:mood_tracker/features/daily_log/models/daily_log_entry.dart';
 import 'package:mood_tracker/features/daily_log/models/daily_log_question.dart';
 import 'package:mood_tracker/shared/date_utils.dart';
+import 'package:mood_tracker/shared/format_utils.dart';
 
 class DailyLogPage extends StatefulWidget {
   const DailyLogPage({
@@ -150,7 +151,7 @@ class _DailyLogPageState extends State<DailyLogPage> {
 
   @override
   Widget build(BuildContext context) {
-    final logDate = _formatDate(_selectedLogDate);
+    final logDate = formatShortDate(_selectedLogDate);
 
     return PopScope(
       canPop: !widget.popOnSave,
@@ -284,27 +285,4 @@ class _QuestionCard extends StatelessWidget {
       ),
     );
   }
-}
-
-String _formatDate(DateTime dateTime) {
-  const months = <String>[
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-
-  final month = months[dateTime.month - 1];
-  final day = dateTime.day;
-  final year = dateTime.year;
-
-  return '$month $day, $year';
 }

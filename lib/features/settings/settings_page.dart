@@ -14,6 +14,7 @@ import 'package:mood_tracker/features/wearables/models/wearable_connection.dart'
 import 'package:mood_tracker/features/wearables/models/wearable_metric_type.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_provider.dart';
 import 'package:mood_tracker/shared/date_utils.dart';
+import 'package:mood_tracker/shared/format_utils.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -122,7 +123,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   const SizedBox(height: 4),
                   Text(
                     _fitbitConnection?.lastSyncedAt != null
-                        ? 'Last synced: ${_formatDateTime(_fitbitConnection!.lastSyncedAt!)}'
+                        ? 'Last synced: ${formatDateTimeLabel(_fitbitConnection!.lastSyncedAt!)}'
                         : 'Last synced: Never',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
@@ -333,7 +334,7 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(() {
         _fitbitConnection = updatedConnection;
         _isSyncingFitbit = false;
-        _fitbitSyncResult = 'Synced Fitbit data for ${_formatDate(today)}';
+        _fitbitSyncResult = 'Synced Fitbit data for ${formatShortDate(today)}';
       });
     } on FitbitApiException catch (error) {
       if (!mounted) {
@@ -808,55 +809,4 @@ List<DateTime> _buildMissingFitbitBackfillDates({
   }
 
   return missingDates;
-}
-
-String _formatDateTime(DateTime dateTime) {
-  const months = <String>[
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-
-  final month = months[dateTime.month - 1];
-  final day = dateTime.day;
-  final year = dateTime.year;
-  final hour24 = dateTime.hour;
-  final minute = dateTime.minute.toString().padLeft(2, '0');
-  final period = hour24 >= 12 ? 'PM' : 'AM';
-  final hour12 = hour24 == 0
-      ? 12
-      : hour24 > 12
-          ? hour24 - 12
-          : hour24;
-
-  return '$month $day, $year $hour12:$minute $period';
-}
-
-String _formatDate(DateTime dateTime) {
-  const months = <String>[
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-
-  final month = months[dateTime.month - 1];
-  return '$month ${dateTime.day}, ${dateTime.year}';
 }

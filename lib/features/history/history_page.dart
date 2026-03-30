@@ -6,6 +6,7 @@ import 'package:mood_tracker/features/daily_log/models/daily_log_entry.dart';
 import 'package:mood_tracker/features/wearables/models/daily_wearable_metric.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_metric_type.dart';
 import 'package:mood_tracker/shared/date_utils.dart';
+import 'package:mood_tracker/shared/format_utils.dart';
 
 const _manualMarkerColor = Color(0xFF2F7D5B);
 const _wearableMarkerColor = Color(0xFFCC7A00);
@@ -425,7 +426,7 @@ class _HistoryDayDetailPageState extends State<_HistoryDayDetailPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_formatDate(widget.logDate)),
+        title: Text(formatShortDate(widget.logDate)),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -466,8 +467,8 @@ class _HistoryDayDetailPageState extends State<_HistoryDayDetailPage> {
                   FilledButton(
                     onPressed: () async {
                       final title = _entry == null
-                          ? 'Log ${_formatDate(widget.logDate)}'
-                          : 'Edit ${_formatDate(widget.logDate)}';
+                          ? 'Log ${formatShortDate(widget.logDate)}'
+                          : 'Edit ${formatShortDate(widget.logDate)}';
                       await Navigator.of(context).push(
                         MaterialPageRoute<void>(
                           builder: (_) => DailyLogPage(
@@ -613,25 +614,6 @@ List<DateTime?> _buildMonthCells(DateTime month) {
 
 bool _isSameMonth(DateTime a, DateTime b) {
   return a.year == b.year && a.month == b.month;
-}
-
-String _formatDate(DateTime dateTime) {
-  const months = <String>[
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-
-  return '${months[dateTime.month - 1]} ${dateTime.day}, ${dateTime.year}';
 }
 
 String _formatMonthYear(DateTime dateTime) {

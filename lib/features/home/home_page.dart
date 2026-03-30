@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mood_tracker/app/settings_menu_button.dart';
 import 'package:mood_tracker/features/daily_log/models/daily_log_entry.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_connection.dart';
+import 'package:mood_tracker/shared/format_utils.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({
@@ -54,7 +55,7 @@ class HomePage extends StatelessWidget {
                   if (hasTodayLog) ...[
                     const SizedBox(height: 8),
                     Text(
-                      'Saved for ${_formatDate(todayEntry!.loggedAt)}',
+                      'Saved for ${formatShortDate(todayEntry!.loggedAt)}',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
@@ -88,7 +89,7 @@ class HomePage extends StatelessWidget {
                   if (fitbitConnection?.lastSyncedAt != null) ...[
                     const SizedBox(height: 8),
                     Text(
-                      'Last synced: ${_formatDateTime(fitbitConnection!.lastSyncedAt!)}',
+                      'Last synced: ${formatDateTimeLabel(fitbitConnection!.lastSyncedAt!)}',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
@@ -109,54 +110,4 @@ class HomePage extends StatelessWidget {
       ),
     );
   }
-}
-
-String _formatDate(DateTime dateTime) {
-  const months = <String>[
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-
-  return '${months[dateTime.month - 1]} ${dateTime.day}, ${dateTime.year}';
-}
-
-String _formatDateTime(DateTime dateTime) {
-  const months = <String>[
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-
-  final month = months[dateTime.month - 1];
-  final day = dateTime.day;
-  final year = dateTime.year;
-  final hour24 = dateTime.hour;
-  final minute = dateTime.minute.toString().padLeft(2, '0');
-  final period = hour24 >= 12 ? 'PM' : 'AM';
-  final hour12 = hour24 == 0
-      ? 12
-      : hour24 > 12
-          ? hour24 - 12
-          : hour24;
-
-  return '$month $day, $year $hour12:$minute $period';
 }
