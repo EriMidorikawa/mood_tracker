@@ -5,16 +5,12 @@ import 'package:mood_tracker/features/wearables/data/fitbit_callback_debug_store
 import 'package:mood_tracker/features/wearables/data/fitbit_oauth_client.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_oauth_session_store.dart';
 import 'package:mood_tracker/features/wearables/data/fitbit_oauth_token_store.dart';
-import 'package:mood_tracker/features/wearables/data/fitbit_source_adapter.dart';
+import 'package:mood_tracker/features/wearables/data/fitbit_sync_service.dart';
 import 'package:mood_tracker/features/wearables/data/local_wearable_repository.dart';
 import 'package:mood_tracker/features/wearables/models/fitbit_callback_debug.dart';
-import 'package:mood_tracker/features/wearables/models/daily_wearable_metric.dart';
-import 'package:mood_tracker/features/wearables/models/fitbit_oauth_token.dart';
 import 'package:mood_tracker/features/wearables/models/fitbit_oauth_preparation.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_connection.dart';
-import 'package:mood_tracker/features/wearables/models/wearable_metric_type.dart';
 import 'package:mood_tracker/features/wearables/models/wearable_provider.dart';
-import 'package:mood_tracker/shared/date_utils.dart';
 import 'package:mood_tracker/shared/format_utils.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -32,6 +28,7 @@ class _SettingsPageState extends State<SettingsPage> {
   final _wearableRepository = LocalWearableRepository();
   final _fitbitOAuthClient = FitbitOAuthClient();
   final _fitbitTokenStore = FitbitOAuthTokenStore();
+  final _fitbitSyncService = FitbitSyncService();
   WearableConnection? _fitbitConnection;
   bool _isSyncingFitbit = false;
   bool _isBackfillingFitbit = false;
@@ -305,37 +302,20 @@ class _SettingsPageState extends State<SettingsPage> {
     });
 
     try {
-      final token = await _requireValidFitbitToken(
+      final result = await _fitbitSyncService.syncDay(
+        date: DateTime.now(),
         expiredMessage: 'Fitbit session expired. Please authorize again.',
         missingMessage: 'Fitbit authorization required',
-        failureMessage: 'Could not sync Fitbit data. Please authorize again.',
-      );
-
-      final today = dateOnly(DateTime.now());
-      final now = DateTime.now();
-      final fitbitAdapter = FitbitSourceAdapter(
-        fetchSnapshot:
-            FitbitApiClient(accessToken: token.accessToken).fetchDailySnapshot,
-      );
-      final metrics = await fitbitAdapter.fetchDailyMetrics(today);
-      await _wearableRepository.upsertDailyMetrics(metrics);
-      final updatedConnection = await _updateFitbitConnection(
-        (existingConnection) => WearableConnection(
-          provider: WearableProvider.fitbit,
-          isConnected: true,
-          accountLabel: existingConnection?.accountLabel,
-          connectedAt: existingConnection?.connectedAt ?? now,
-          lastSyncedAt: now,
-        ),
       );
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _fitbitConnection = updatedConnection;
+        _fitbitConnection = result.connection;
         _isSyncingFitbit = false;
-        _fitbitSyncResult = 'Synced Fitbit data for ${formatShortDate(today)}';
+        _fitbitSyncResult =
+            'Synced Fitbit data for ${formatShortDate(result.syncedDate)}';
       });
     } on FitbitApiException catch (error) {
       if (!mounted) {
@@ -373,88 +353,45 @@ class _SettingsPageState extends State<SettingsPage> {
     });
 
     var importedDays = 0;
-    var failedDays = 0;
     try {
-      final token = await _requireValidFitbitToken(
+      final result = await _fitbitSyncService.backfillRecentDays(
+        days: _selectedFitbitBackfillDays,
         expiredMessage: 'Fitbit session expired. Please authorize again.',
         missingMessage: 'Fitbit authorization required',
-        failureMessage: 'Could not sync Fitbit data. Please authorize again.',
-      );
+        onProgress: (completed, target) {
+          if (!mounted) {
+            return;
+          }
 
-      final today = dateOnly(DateTime.now());
-      final startDate = today.subtract(
-        Duration(days: _selectedFitbitBackfillDays - 1),
+          setState(() {
+            _fitbitBackfillProgress = completed;
+            _fitbitBackfillTarget = target;
+          });
+        },
       );
-      final existingMetrics = await _wearableRepository.loadDailyMetricsInRange(
-        startDate: startDate,
-        endDate: today,
-        provider: WearableProvider.fitbit,
-      );
-      final missingDates = _buildMissingFitbitBackfillDates(
-        existingMetrics: existingMetrics,
-        startDate: startDate,
-        endDate: today,
-      );
-      final skippedDays = _selectedFitbitBackfillDays - missingDates.length;
-
-      if (missingDates.isEmpty) {
+      importedDays = result.importedDays;
+      if (result.targetDays == 0) {
         setState(() {
           _isBackfillingFitbit = false;
           _fitbitBackfillProgress = 0;
           _fitbitBackfillTarget = 0;
           _fitbitSyncResult = 'No new Fitbit data was needed. Skipped '
-              '$skippedDays already imported days.';
+              '${result.skippedDays} already imported days.';
         });
         return;
       }
-
-      setState(() {
-        _fitbitBackfillTarget = missingDates.length;
-      });
-
-      final fitbitAdapter = FitbitSourceAdapter(
-        fetchSnapshot:
-            FitbitApiClient(accessToken: token.accessToken).fetchDailySnapshot,
-      );
-
-      for (final date in missingDates) {
-        try {
-          final metrics = await fitbitAdapter.fetchDailyMetrics(date);
-          await _wearableRepository.upsertDailyMetrics(metrics);
-          importedDays += 1;
-        } catch (_) {
-          failedDays += 1;
-        }
-
-        if (mounted) {
-          setState(() {
-            _fitbitBackfillProgress = importedDays + failedDays;
-          });
-        }
-      }
-
-      final now = DateTime.now();
-      final updatedConnection = await _updateFitbitConnection(
-        (existingConnection) => WearableConnection(
-          provider: WearableProvider.fitbit,
-          isConnected: true,
-          accountLabel: existingConnection?.accountLabel,
-          connectedAt: existingConnection?.connectedAt ?? now,
-          lastSyncedAt: now,
-        ),
-      );
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _fitbitConnection = updatedConnection;
+        _fitbitConnection = result.connection;
         _isBackfillingFitbit = false;
-        _fitbitBackfillProgress = importedDays + failedDays;
-        _fitbitBackfillTarget = missingDates.length;
-        _fitbitSyncResult = failedDays == 0
-            ? 'Imported $importedDays new days. Skipped $skippedDays already imported days.'
-            : 'Imported $importedDays new days. Skipped $skippedDays already imported days. Some days could not be synced.';
+        _fitbitBackfillProgress = result.importedDays + result.failedDays;
+        _fitbitBackfillTarget = result.targetDays;
+        _fitbitSyncResult = result.failedDays == 0
+            ? 'Imported ${result.importedDays} new days. Skipped ${result.skippedDays} already imported days.'
+            : 'Imported ${result.importedDays} new days. Skipped ${result.skippedDays} already imported days. Some days could not be synced.';
       });
     } on FitbitApiException catch (error) {
       if (!mounted) {
@@ -489,9 +426,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _loadFitbitConnection() async {
-    final connection = await _wearableRepository.loadConnection(
-      WearableProvider.fitbit,
-    );
+    final connection = await _fitbitSyncService.loadConnection();
     if (!mounted) {
       return;
     }
@@ -554,39 +489,6 @@ class _SettingsPageState extends State<SettingsPage> {
     await _syncFitbitData();
   }
 
-  Future<FitbitOAuthToken> _requireValidFitbitToken({
-    required String missingMessage,
-    required String expiredMessage,
-    required String failureMessage,
-  }) async {
-    final token = await _fitbitTokenStore.loadToken();
-    if (token == null) {
-      throw FitbitApiException(missingMessage);
-    }
-
-    if (!token.isExpired) {
-      return token;
-    }
-
-    final updatedConnection = await _updateFitbitConnection(
-      (existingConnection) => WearableConnection(
-        provider: WearableProvider.fitbit,
-        isConnected: false,
-        accountLabel: existingConnection?.accountLabel,
-        connectedAt: existingConnection?.connectedAt,
-        lastSyncedAt: null,
-      ),
-    );
-    if (mounted) {
-      setState(() {
-        _fitbitConnection = updatedConnection;
-        _fitbitSyncResult = failureMessage;
-      });
-    }
-
-    throw FitbitApiException(expiredMessage);
-  }
-
   Future<void> _disconnectFitbit() async {
     final existingConnection = _fitbitConnection;
     if (existingConnection == null) {
@@ -618,15 +520,7 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
 
-    final updatedConnection = await _updateFitbitConnection(
-      (_) => WearableConnection(
-        provider: WearableProvider.fitbit,
-        isConnected: false,
-        accountLabel: existingConnection.accountLabel,
-        connectedAt: existingConnection.connectedAt,
-        lastSyncedAt: null,
-      ),
-    );
+    final updatedConnection = await _fitbitSyncService.disconnect();
     if (!mounted) {
       return;
     }
@@ -824,32 +718,4 @@ class _PreparedFitbitCallback {
 
   final FitbitCallbackDebug callback;
   final FitbitOAuthPreparation preparation;
-}
-
-List<DateTime> _buildMissingFitbitBackfillDates({
-  required List<DailyWearableMetric> existingMetrics,
-  required DateTime startDate,
-  required DateTime endDate,
-}) {
-  final metricTypesByDate = <String, Set<WearableMetricType>>{};
-  for (final metric in existingMetrics) {
-    final dayKey = dateKey(metric.date);
-    metricTypesByDate.putIfAbsent(dayKey, () => <WearableMetricType>{}).add(
-      metric.metricType,
-    );
-  }
-
-  final missingDates = <DateTime>[];
-  var cursor = dateOnly(startDate);
-  final end = dateOnly(endDate);
-  while (!cursor.isAfter(end)) {
-    final metricTypes = metricTypesByDate[dateKey(cursor)] ?? const {};
-    if (!(metricTypes.contains(WearableMetricType.sleepDurationMin) &&
-        metricTypes.contains(WearableMetricType.restingHeartRateBpm))) {
-      missingDates.add(cursor);
-    }
-    cursor = cursor.add(const Duration(days: 1));
-  }
-
-  return missingDates;
 }
