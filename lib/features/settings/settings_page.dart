@@ -316,20 +316,14 @@ class _SettingsPageState extends State<SettingsPage> {
       );
       final metrics = await fitbitAdapter.fetchDailyMetrics(today);
       await _wearableRepository.upsertDailyMetrics(metrics);
-      final existingConnection = await _wearableRepository.loadConnection(
-        WearableProvider.fitbit,
-      );
-      await _wearableRepository.upsertConnection(
-        WearableConnection(
+      final updatedConnection = await _updateFitbitConnection(
+        (existingConnection) => WearableConnection(
           provider: WearableProvider.fitbit,
           isConnected: true,
           accountLabel: existingConnection?.accountLabel,
           connectedAt: existingConnection?.connectedAt ?? now,
           lastSyncedAt: now,
         ),
-      );
-      final updatedConnection = await _wearableRepository.loadConnection(
-        WearableProvider.fitbit,
       );
       if (!mounted) {
         return;
@@ -437,20 +431,14 @@ class _SettingsPageState extends State<SettingsPage> {
       }
 
       final now = DateTime.now();
-      final existingConnection = await _wearableRepository.loadConnection(
-        WearableProvider.fitbit,
-      );
-      await _wearableRepository.upsertConnection(
-        WearableConnection(
+      final updatedConnection = await _updateFitbitConnection(
+        (existingConnection) => WearableConnection(
           provider: WearableProvider.fitbit,
           isConnected: true,
           accountLabel: existingConnection?.accountLabel,
           connectedAt: existingConnection?.connectedAt ?? now,
           lastSyncedAt: now,
         ),
-      );
-      final updatedConnection = await _wearableRepository.loadConnection(
-        WearableProvider.fitbit,
       );
       if (!mounted) {
         return;
@@ -520,6 +508,19 @@ class _SettingsPageState extends State<SettingsPage> {
 
   bool get _hasFitbitConnection => _fitbitConnection?.isConnected == true;
 
+  Future<WearableConnection?> _updateFitbitConnection(
+    WearableConnection Function(WearableConnection? existingConnection)
+        buildConnection,
+  ) async {
+    final existingConnection = await _wearableRepository.loadConnection(
+      WearableProvider.fitbit,
+    );
+    await _wearableRepository.upsertConnection(
+      buildConnection(existingConnection),
+    );
+    return _wearableRepository.loadConnection(WearableProvider.fitbit);
+  }
+
   bool get _isFitbitSyncedToday {
     final lastSyncedAt = _fitbitConnection?.lastSyncedAt;
     if (lastSyncedAt == null) {
@@ -564,20 +565,14 @@ class _SettingsPageState extends State<SettingsPage> {
       return token;
     }
 
-    final existingConnection = await _wearableRepository.loadConnection(
-      WearableProvider.fitbit,
-    );
-    await _wearableRepository.upsertConnection(
-      WearableConnection(
+    final updatedConnection = await _updateFitbitConnection(
+      (existingConnection) => WearableConnection(
         provider: WearableProvider.fitbit,
         isConnected: false,
         accountLabel: existingConnection?.accountLabel,
         connectedAt: existingConnection?.connectedAt,
         lastSyncedAt: null,
       ),
-    );
-    final updatedConnection = await _wearableRepository.loadConnection(
-      WearableProvider.fitbit,
     );
     if (mounted) {
       setState(() {
@@ -620,18 +615,14 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
 
-    await _wearableRepository.upsertConnection(
-      WearableConnection(
+    final updatedConnection = await _updateFitbitConnection(
+      (_) => WearableConnection(
         provider: WearableProvider.fitbit,
         isConnected: false,
         accountLabel: existingConnection.accountLabel,
         connectedAt: existingConnection.connectedAt,
         lastSyncedAt: null,
       ),
-    );
-
-    final updatedConnection = await _wearableRepository.loadConnection(
-      WearableProvider.fitbit,
     );
     if (!mounted) {
       return;
@@ -697,20 +688,14 @@ class _SettingsPageState extends State<SettingsPage> {
       final now = DateTime.now();
       final updatedConnection = await (() async {
         try {
-          final existingConnection = await _wearableRepository.loadConnection(
-            WearableProvider.fitbit,
-          );
-          await _wearableRepository.upsertConnection(
-            WearableConnection(
+          return await _updateFitbitConnection(
+            (existingConnection) => WearableConnection(
               provider: WearableProvider.fitbit,
               isConnected: true,
               accountLabel: existingConnection?.accountLabel,
               connectedAt: existingConnection?.connectedAt ?? now,
               lastSyncedAt: existingConnection?.lastSyncedAt,
             ),
-          );
-          return await _wearableRepository.loadConnection(
-            WearableProvider.fitbit,
           );
         } catch (error) {
           throw _FitbitCallbackStageException(
