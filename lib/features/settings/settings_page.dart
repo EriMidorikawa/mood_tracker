@@ -67,138 +67,34 @@ class _SettingsPageState extends State<SettingsPage> {
             style: Theme.of(context).textTheme.bodyLarge,
           ),
           const SizedBox(height: 24),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Fitbit',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Connect Fitbit and sync your recent sleep and resting heart rate data.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    _fitbitStatusLabel,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                  if (_hasFitbitConnection) ...[
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.check_circle,
-                          size: 16,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Fitbit is connected',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                  ] else ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      'Connect Fitbit to import sleep and resting heart rate data.',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                  const SizedBox(height: 4),
-                  Text(
-                    _fitbitConnection?.lastSyncedAt != null
-                        ? 'Last synced: ${formatDateTimeLabel(_fitbitConnection!.lastSyncedAt!)}'
-                        : 'Last synced: Never',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 16),
-                  FilledButton(
-                    onPressed: _fitbitState.isHandlingCallback ||
-                            _fitbitState.isSyncing
-                        ? null
-                        : _handleFitbitPrimaryAction,
-                    child: Text(
-                      _fitbitState.isHandlingCallback
-                          ? 'Connecting Fitbit...'
-                          : _fitbitPrimaryActionLabel,
-                    ),
-                  ),
-                  if (!_hasFitbitConnection) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'After tapping Connect Fitbit, we will open Fitbit in your browser to finish authorization.',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  SegmentedButton<int>(
-                    segments: _backfillOptions
-                        .map(
-                          (days) => ButtonSegment<int>(
-                            value: days,
-                            label: Text('Last $days days'),
-                          ),
-                        )
-                        .toList(),
-                    selected: {_fitbitState.selectedBackfillDays},
-                    onSelectionChanged: _fitbitState.isBackfilling
-                        ? null
-                        : (selection) {
-                            setState(() {
-                              _fitbitState = _fitbitState.copyWith(
-                                selectedBackfillDays: selection.first,
-                                backfillTarget: selection.first,
-                              );
-                            });
-                          },
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton(
-                    onPressed:
-                        _fitbitState.isBackfilling ? null : _backfillFitbitData,
-                    child: Text(
-                      _fitbitState.isBackfilling
-                          ? 'Backfilling Fitbit data...'
-                          : 'Backfill last ${_fitbitState.selectedBackfillDays} days',
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Import recent Fitbit history for the last ${_fitbitState.selectedBackfillDays} days.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  if (_fitbitState.isBackfilling) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      '${_fitbitState.backfillProgress} / ${_fitbitState.backfillTarget}',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  TextButton(
-                    onPressed: _fitbitConnection == null
-                        ? null
-                        : _disconnectFitbit,
-                    child: const Text('Disconnect'),
-                  ),
-                  if (_fitbitState.syncResult != null) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      _fitbitState.syncResult!,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ],
-                ],
-              ),
-            ),
+          _FitbitSectionCard(
+            statusLabel: _fitbitStatusLabel,
+            hasConnection: _hasFitbitConnection,
+            lastSyncedAt: _fitbitConnection?.lastSyncedAt,
+            isHandlingCallback: _fitbitState.isHandlingCallback,
+            isBackfilling: _fitbitState.isBackfilling,
+            selectedBackfillDays: _fitbitState.selectedBackfillDays,
+            backfillProgress: _fitbitState.backfillProgress,
+            backfillTarget: _fitbitState.backfillTarget,
+            syncResult: _fitbitState.syncResult,
+            primaryActionLabel: _fitbitPrimaryActionLabel,
+            backfillOptions: _backfillOptions,
+            onPrimaryAction: _fitbitState.isHandlingCallback ||
+                    _fitbitState.isSyncing
+                ? null
+                : _handleFitbitPrimaryAction,
+            onBackfillSelectionChanged: _fitbitState.isBackfilling
+                ? null
+                : (selection) {
+                    setState(() {
+                      _fitbitState = _fitbitState.copyWith(
+                        selectedBackfillDays: selection.first,
+                        backfillTarget: selection.first,
+                      );
+                    });
+                  },
+            onBackfill: _fitbitState.isBackfilling ? null : _backfillFitbitData,
+            onDisconnect: _fitbitConnection == null ? null : _disconnectFitbit,
           ),
           const SizedBox(height: 16),
           Card(
@@ -748,6 +644,162 @@ class _PreparedFitbitCallback {
 
   final FitbitCallbackDebug callback;
   final FitbitOAuthPreparation preparation;
+}
+
+class _FitbitSectionCard extends StatelessWidget {
+  const _FitbitSectionCard({
+    required this.statusLabel,
+    required this.hasConnection,
+    required this.lastSyncedAt,
+    required this.isHandlingCallback,
+    required this.isBackfilling,
+    required this.selectedBackfillDays,
+    required this.backfillProgress,
+    required this.backfillTarget,
+    required this.syncResult,
+    required this.primaryActionLabel,
+    required this.backfillOptions,
+    required this.onPrimaryAction,
+    required this.onBackfillSelectionChanged,
+    required this.onBackfill,
+    required this.onDisconnect,
+  });
+
+  final String statusLabel;
+  final bool hasConnection;
+  final DateTime? lastSyncedAt;
+  final bool isHandlingCallback;
+  final bool isBackfilling;
+  final int selectedBackfillDays;
+  final int backfillProgress;
+  final int backfillTarget;
+  final String? syncResult;
+  final String primaryActionLabel;
+  final List<int> backfillOptions;
+  final VoidCallback? onPrimaryAction;
+  final ValueChanged<Set<int>>? onBackfillSelectionChanged;
+  final VoidCallback? onBackfill;
+  final VoidCallback? onDisconnect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Fitbit',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Connect Fitbit and sync your recent sleep and resting heart rate data.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              statusLabel,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            if (hasConnection) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Icon(
+                    Icons.check_circle,
+                    size: 16,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Fitbit is connected',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ] else ...[
+              const SizedBox(height: 6),
+              Text(
+                'Connect Fitbit to import sleep and resting heart rate data.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+            const SizedBox(height: 4),
+            Text(
+              lastSyncedAt != null
+                  ? 'Last synced: ${formatDateTimeLabel(lastSyncedAt!)}'
+                  : 'Last synced: Never',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: onPrimaryAction,
+              child: Text(
+                isHandlingCallback ? 'Connecting Fitbit...' : primaryActionLabel,
+              ),
+            ),
+            if (!hasConnection) ...[
+              const SizedBox(height: 8),
+              Text(
+                'After tapping Connect Fitbit, we will open Fitbit in your browser to finish authorization.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+            const SizedBox(height: 16),
+            SegmentedButton<int>(
+              segments: backfillOptions
+                  .map(
+                    (days) => ButtonSegment<int>(
+                      value: days,
+                      label: Text('Last $days days'),
+                    ),
+                  )
+                  .toList(),
+              selected: {selectedBackfillDays},
+              onSelectionChanged: onBackfillSelectionChanged,
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton(
+              onPressed: onBackfill,
+              child: Text(
+                isBackfilling
+                    ? 'Backfilling Fitbit data...'
+                    : 'Backfill last $selectedBackfillDays days',
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Import recent Fitbit history for the last $selectedBackfillDays days.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            if (isBackfilling) ...[
+              const SizedBox(height: 8),
+              Text(
+                '$backfillProgress / $backfillTarget',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: onDisconnect,
+              child: const Text('Disconnect'),
+            ),
+            if (syncResult != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                syncResult!,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _FitbitSettingsState {
